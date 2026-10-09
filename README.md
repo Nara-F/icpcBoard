@@ -1,6 +1,6 @@
 # icpcBoard
 
-icpcBoard 是按 Markdown 章节维护的 ICPC 中文算法手册。内容放在 `content/`；HTML 模板、打印样式和构建配置彼此独立，同一份源文件可生成 Markdown、HTML 和 PDF。
+自用 ICPC 算法板子，整理常用模板与调试方法。内容以 Markdown 管理，可构建为 Markdown、HTML 和 PDF。
 
 ## 构建
 
@@ -20,7 +20,7 @@ make all
 
 ## 内容格式
 
-章节文件放在 `content/chapters/`，使用带零填充数字前缀的文件名（如 `01-...md`、`02-...md`），构建时按文件名排序。每章必须有且仅有一个一级标题 `#`。使用 `##` 作为小节标题、`cpp` 围栏代码块、标准 Markdown 表格，以及 `$...$` / `$$...$$` TeX 数学公式。前言和关键词索引在 `config/build.json` 中单独列出，不纳入章节通配符。STL 章提供常用容器、迭代器与算法的精简速查；具体算法仍放在对应专题章，避免重复堆叠库函数清单。
+章节文件放在 `content/chapters/`，使用带零填充数字前缀的文件名（如 `01-...md`、`02-...md`），构建时按文件名排序。每章必须有且仅有一个一级标题 `#`。使用 `##` 作为小节标题、`cpp` 围栏代码块、标准 Markdown 表格，以及 `$...$` / `$$...$$` TeX 数学公式。关键词索引在 `config/build.json` 中单独列出，不纳入章节通配符。STL 章提供常用容器、迭代器与算法的精简速查；具体算法仍放在对应专题章，避免重复堆叠库函数清单。
 
 `make validate` 检查章节结构、围栏代码、显式标题 ID、不可见控制字符和配置输入，不生成交付文件。也可直接运行 `python scripts/build.py --format markdown|html|pdf|all`，按需使用各导出层。`make clean` 清除构建产物。
 
@@ -28,7 +28,6 @@ make all
 
 ```text
 config/build.json             源文件顺序、标题与输出路径
-content/frontmatter.md       前言
 content/chapters/01–09        九个编号章节
 content/10-keyword-index.md   题意关键词索引
 scripts/build.py             Markdown、HTML、PDF 构建器
@@ -57,7 +56,3 @@ python3 tests/check_algorithms.py
 `check_foundations.py` 独立编译第 01–04 章的 45 个 C++17 围栏代码块，并运行 Python 随机对拍工具的成功、错误答案缩减、异常退出与超时检查，以及构造题断言和滑动窗口边界检查。`check_algorithms.py` 检查第 05–09 章代码块，并运行图论、数据结构、字符串和几何等算法的定向回归样例。
 
 第 01–04 章与第 05–09 章的来源和覆盖说明见 [docs/coverage-01-04.md](docs/coverage-01-04.md) 与 [docs/coverage-05-09.md](docs/coverage-05-09.md)。
-
-## 原有样例
-
-仓库初始样例保留在 `output/source/` 与 `output/pdf/icpc-sample.pdf`，作为参考文件，不会被新手册构建覆盖。

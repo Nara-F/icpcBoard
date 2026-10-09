@@ -6,9 +6,6 @@
   "html": "output/html/icpcBoard.html",
   "markdown": "output/markdown/icpcBoard.md",
   "pdf": "output/pdf/icpcBoard.pdf",
-  "before_chapters": [
-    "content/frontmatter.md"
-  ],
   "after_chapters": [
     "content/10-keyword-index.md"
   ]
