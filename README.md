@@ -20,9 +20,9 @@ make all
 
 ## 内容格式
 
-章节文件放在 `content/chapters/`，使用带零填充数字前缀的文件名（如 `01-...md`、`02-...md`），构建时按文件名排序。每章必须有且仅有一个一级标题 `#`。使用 `##` 作为小节标题、`cpp` 围栏代码块、标准 Markdown 表格，以及 `$...$` / `$$...$$` TeX 数学公式。前言和关键词索引在 `config/build.json` 中单独列出，不纳入章节通配符。
+章节文件放在 `content/chapters/`，使用带零填充数字前缀的文件名（如 `01-...md`、`02-...md`），构建时按文件名排序。每章必须有且仅有一个一级标题 `#`。使用 `##` 作为小节标题、`cpp` 围栏代码块、标准 Markdown 表格，以及 `$...$` / `$$...$$` TeX 数学公式。前言和关键词索引在 `config/build.json` 中单独列出，不纳入章节通配符。STL 章提供常用容器、迭代器与算法的精简速查；具体算法仍放在对应专题章，避免重复堆叠库函数清单。
 
-`make validate` 检查章节结构、围栏代码、显式标题 ID 和配置输入，不生成交付文件。也可直接运行 `python scripts/build.py --format markdown|html|pdf|all`，按需使用各导出层。`make clean` 清除构建产物。
+`make validate` 检查章节结构、围栏代码、显式标题 ID、不可见控制字符和配置输入，不生成交付文件。也可直接运行 `python scripts/build.py --format markdown|html|pdf|all`，按需使用各导出层。`make clean` 清除构建产物。
 
 ## 项目结构
 
@@ -39,6 +39,12 @@ docs/                         构建说明与内容覆盖表
 output/                       本地生成结果与保留的样例
 ```
 
+## 内容写作约定
+
+每个算法小节都要写清适用范围、能解决什么问题，以及具体输入和输出；复杂度和边界条件应与实现一致。代码中的每个函数、构造函数、辅助函数和 lambda 都在定义前说明真实参数、返回值；`void` 函数说明修改的结构或外部状态，并标出索引约定和必要前提。不要用“输入见代码”等套话。详见 [docs/authoring.md](docs/authoring.md)。
+
+新增内容遵循 [docs/authoring.md](docs/authoring.md)：优先归入已有章节和检查入口，保持算法源文档与版式、导出配置分层。
+
 ## 代码检查
 
 在安装了 `g++` 的环境中运行：
@@ -48,7 +54,7 @@ python3 tests/check_foundations.py
 python3 tests/check_algorithms.py
 ```
 
-`check_foundations.py` 独立编译第 01–04 章的所有 C++17 围栏代码块，只做语法检查。`check_algorithms.py` 检查第 05–09 章代码块，并运行 Bellman–Ford、线段树、Dinic、最小费用流、区间赋值线段树、后缀数组和圆几何的定向回归样例。
+`check_foundations.py` 独立编译第 01–04 章的 45 个 C++17 围栏代码块，并运行 Python 随机对拍工具的成功、错误答案缩减、异常退出与超时检查，以及构造题断言和滑动窗口边界检查。`check_algorithms.py` 检查第 05–09 章代码块，并运行图论、数据结构、字符串和几何等算法的定向回归样例。
 
 第 01–04 章与第 05–09 章的来源和覆盖说明见 [docs/coverage-01-04.md](docs/coverage-01-04.md) 与 [docs/coverage-05-09.md](docs/coverage-05-09.md)。
 

@@ -5,6 +5,8 @@
 
 
 ## 6.1 拓扑排序
+**适用范围：** 适用于有向无环图的依赖排序和 DAG 动态规划。 **能做什么：** 返回满足每条有向边先后关系的一个拓扑序，并检测环。 **输入 / 输出：** 输入：1-based 有向邻接表及逐边入度；输出：拓扑点序，有环时为空。
+
 
 **问题与思路：** 把有向无环图排成每条边都从前指向后的序列，适合先修关系、任务依赖与 DAG DP。统计入度，将所有入度为 0 的点入队，取出后删除其出边。邻接表实现时间 $O(n+m)$、空间 $O(n+m)$。结果不足 $n$ 个点说明存在有向环，因而没有拓扑序。
 
@@ -16,9 +18,11 @@
 - 函数按值接收入度，不会破坏调用者保存的原入度。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
+// 参数 graph 为 1-based 有向邻接表，indegree 是逐边统计的入度副本；返回拓扑序，有环返回空表。
 vector<int> topologicalSort(
     const vector<vector<int>>& graph,
     vector<int> indegree
@@ -57,6 +61,8 @@ vector<int> topologicalSort(
 - [OI Wiki：拓扑排序](https://oi-wiki.org/graph/topo/)
 
 ## 6.2 Dijkstra 单源最短路
+**适用范围：** 适用于所有边权非负的有向或无向加权图。 **能做什么：** 求单源最短距离并记录一棵最短路前驱树。 **输入 / 输出：** 输入：1-based 邻接表、非负边权和起点；输出：距离及前驱数组，不可达距离为 INF。
+
 
 **问题与思路：** 求一个起点到所有点的最短距离，适用于有向或无向图，但边权必须非负。用小根堆反复取当前距离最小的点并松弛出边，旧堆记录直接跳过。复杂度 $O((n+m)\log n)$，空间 $O(n+m)$。负边会破坏正确性；不可达点保持 `INF`。
 
@@ -68,6 +74,7 @@ vector<int> topologicalSort(
 - 所有权值必须 `>=0`，距离与权值使用 `long long`；有限最短距离须小于 `INF` 且加法不越界。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -85,6 +92,7 @@ struct DijkstraResult {
     vector<int> previous; // 最短路树中的前驱；start 和不可达点均为 -1
 };
 
+// 参数 graph 为 1-based 非负权邻接表、start 为合法起点；返回各点距离和前驱，不修改图。
 DijkstraResult dijkstra(
     const vector<vector<Edge>>& graph,
     int start
@@ -116,7 +124,8 @@ DijkstraResult dijkstra(
     return {distance, previous};
 }
 
-vector<int> restorePath(int start, int target, const vector<int>& previous) {
+// 参数 start/target 为点号，previous 是最短路前驱表；返回路径点序，不可达时空表；不改输入。
+    vector<int> restorePath(int start, int target, const vector<int>& previous) {
     // 返回 start 到 target 的点序列；前驱链无法到 start 时返回空数组。
     vector<int> path;
     for (int v = target; v != -1; v = previous[v]) {
@@ -141,6 +150,8 @@ vector<int> restorePath(int start, int target, const vector<int>& previous) {
 - [OI Wiki：最短路](https://oi-wiki.org/graph/shortest-path/)
 
 ## 6.3 Bellman–Ford 与负环判断
+**适用范围：** 适用于含负边的单源最短路及起点可达负环检测。 **能做什么：** 计算可达最短距离并报告起点可达负环。 **输入 / 输出：** 输入：点数、起点及有向边表；输出：距离数组与负环布尔值。
+
 
 **问题与思路：** 单源最短路含负权边时使用。连续扫描所有边并松弛，最多做 $n-1$ 轮；第 $n$ 轮仍可松弛说明存在“起点可达”的负环，最短路无定义。时间 $O(nm)$、空间 $O(n)$，适合规模较小或用于差分约束。不可达点不能参与松弛。
 
@@ -152,6 +163,7 @@ vector<int> restorePath(int start, int target, const vector<int>& previous) {
 - 若某轮没有更新，可提前结束。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -164,6 +176,7 @@ struct DirectedEdge {
     ll weight;
 };
 
+// 参数 n/start/edges 为点数、起点和有向边表；返回距离及起点可达负环标志，不改边表。
 pair<vector<ll>, bool> bellmanFord(
     int n,
     int start,
@@ -212,6 +225,8 @@ pair<vector<ll>, bool> bellmanFord(
 - [OI Wiki：Bellman–Ford 算法](https://oi-wiki.org/graph/shortest-path/#bellmanford-%E7%AE%97%E6%B3%95)
 
 ## 6.4 Floyd 全源最短路
+**适用范围：** 适用于点数较小、需要所有点对距离的加权图，可含负边但不能有负环。 **能做什么：** 原地计算所有点对最短距离。 **输入 / 输出：** 输入：1-based 距离矩阵，INF 表示无边；输出：原地更新后的全源距离矩阵。
+
 
 **问题与思路：** 求任意两点间最短路，适合点数较小的稠密图，并允许负边。依次允许编号 `1..k` 的点作为中转，更新 `dist[i][j]`。时间 $O(n^3)$、空间 $O(n^2)$。不能存在负环；完成后若 `dist[i][i]<0`，说明存在负环。不可达状态必须先判断再相加。
 
@@ -223,25 +238,29 @@ pair<vector<ll>, bool> bellmanFord(
 - 模板原地修改距离矩阵。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
 using ll = long long;
 const ll INF = numeric_limits<ll>::max() / 4;
 
-vector<vector<ll>> makeDistanceMatrix(int n) {
+// 参数 n 为点数；返回 n+1 方阵，1..n 对角为 0、其余 INF；分配新矩阵。
+    vector<vector<ll>> makeDistanceMatrix(int n) {
     // 矩阵使用 1..n；distance[u][v] 表示有向距离，初始仅自身到自身为 0。
     vector<vector<ll>> distance(n + 1, vector<ll>(n + 1, INF));
     for (int i = 1; i <= n; ++i) distance[i][i] = 0;
     return distance;
 }
 
-void addDirectedEdge(vector<vector<ll>>& distance, int u, int v, ll weight) {
+// 参数为距离矩阵、端点和权值；返回 void，以较小权值写 distance[u][v]；不自动添加反向边。
+    void addDirectedEdge(vector<vector<ll>>& distance, int u, int v, ll weight) {
     // 保留同方向重边中的最小值；无向边需再调用一次 (v,u,weight)。
     distance[u][v] = min(distance[u][v], weight);
 }
 
-void floydWarshall(vector<vector<ll>>& distance) {
+// 参数是 1-based 方阵；返回 void，原地覆盖为全源最短距离，须无负环且加法不溢出。
+    void floydWarshall(vector<vector<ll>>& distance) {
     int n = (int)distance.size() - 1;
     // k 必须最外层：完成第 k 轮后，只允许 1..k 作为内部中转点。
     for (int k = 1; k <= n; ++k) {
@@ -272,6 +291,8 @@ void floydWarshall(vector<vector<ll>>& distance) {
 - [OI Wiki：Floyd 算法](https://oi-wiki.org/graph/shortest-path/#floyd-%E7%AE%97%E6%B3%95)
 
 ## 6.5 Kruskal 最小生成树
+**适用范围：** 适用于连通无向带权图的最小生成树，也能返回不连通图的最小生成森林。 **能做什么：** 按权贪心选边，给出总权和所选边。 **输入 / 输出：** 输入：点数及每条无向边仅出现一次的边表；输出：连通标记、总权和森林边集。
+
 
 **问题与思路：** 在连通无向带权图中选 $n-1$ 条边，使总权最小。按边权升序扫描，用并查集加入连接两个不同连通块的边。排序主导时间 $O(m\log m)$，空间 $O(n+m)$；允许负权和重边。若最终不足 $n-1$ 条边，原图不连通，只得到最小生成森林。
 
@@ -283,6 +304,7 @@ void floydWarshall(vector<vector<ll>>& distance) {
 - 只求总权时可以删除 `chosen` 以节省少量空间。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -291,12 +313,15 @@ using ll = long long;
 struct DSU {
     // 只有根的 sizeOf 有效；路径压缩和按大小合并保证近常数均摊复杂度。
     vector<int> parent, sizeOf;
+    // 参数 n 是点编号上界；建立 1..n 单元素集合并初始化内部父节点和大小。
     explicit DSU(int n) : parent(n + 1), sizeOf(n + 1, 1) {
         iota(parent.begin(), parent.end(), 0);
     }
+    // 参数 x 是 1..n 元素；返回集合代表并压缩访问路径。
     int find(int x) {
         return parent[x] == x ? x : parent[x] = find(parent[x]);
     }
+    // 参数 a/b 是 1..n 元素；成功合并返回 true，否则 false；修改代表和集合大小。
     bool unite(int a, int b) {
         a = find(a); b = find(b);
         if (a == b) return false;
@@ -319,9 +344,11 @@ struct KruskalResult {
     vector<WeightedEdge> chosen;
 };
 
-KruskalResult kruskal(int n, vector<WeightedEdge> edges) {
+// 参数 n 为点数、edges 为每条无向边只存一次的边表副本；返回生成森林信息，不改调用者边表。
+    KruskalResult kruskal(int n, vector<WeightedEdge> edges) {
     // 按权从小到大扫描；不成环的最轻边一定可安全加入当前生成森林。
-    sort(edges.begin(), edges.end(), [](const auto& a, const auto& b) {
+// 比较器参数为两条边；权值较小者排前，同权顺序任意；不修改边对象。
+        sort(edges.begin(), edges.end(), [](const auto& a, const auto& b) {
         return a.weight < b.weight;
     });
 
@@ -349,6 +376,8 @@ KruskalResult kruskal(int n, vector<WeightedEdge> edges) {
 - [OI Wiki：最小生成树](https://oi-wiki.org/graph/mst/)
 
 ## 6.6 二分图判定
+**适用范围：** 适用于无向图二部性检查，包括非连通图。 **能做什么：** 染色并判断是否存在奇环。 **输入 / 输出：** 输入：1-based 无向邻接表；输出：是否为二分图及 0/1 染色（失败时染色可能不完整）。
+
 
 **问题与思路：** 判断无向图能否把点分成两组，使每条边跨组；等价于图中没有奇环。对每个未染色点 BFS，令相邻点颜色相反，若相邻点同色则失败。时间 $O(n+m)$、空间 $O(n+m)$。非连通图必须逐个连通块染色；自环必然使图不是二分图。
 
@@ -360,10 +389,12 @@ KruskalResult kruskal(int n, vector<WeightedEdge> edges) {
 - 重边不影响结论；自环会被正确判为冲突。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
-bool colorBipartite(const vector<vector<int>>& graph, vector<int>& color) {
+// 参数 graph 为 1-based 无向邻接表；返回是否二分图，并覆盖 color 为染色结果（失败时可能不完整）。
+    bool colorBipartite(const vector<vector<int>>& graph, vector<int>& color) {
     // graph 必须是无向图的双向邻接表；-1 未访问，0/1 表示两侧颜色。
     int n = (int)graph.size() - 1;
     color.assign(n + 1, -1);
@@ -403,6 +434,8 @@ bool colorBipartite(const vector<vector<int>>& graph, vector<int>& color) {
 - [OI Wiki：二分图](https://oi-wiki.org/graph/bi-graph/)
 
 ## 6.7 二分图最大匹配（增广路）
+**适用范围：** 适用于已知左右部划分的中等规模二分图匹配。 **能做什么：** 求最大匹配数并维护右部匹配关系。 **输入 / 输出：** 输入：左右部点数及左到右的邻接关系；输出：最大匹配数，matchRight 保存匹配。
+
 
 **问题与思路：** 在二分图中选最多条互不共享端点的边，适合任务分配和配对。逐个左部点 DFS 寻找增广路；遇到已匹配右点时，尝试为其原搭档改配。朴素复杂度 $O(VE)$、空间 $O(V+E)$，适合中等规模；更大规模可用 Hopcroft–Karp。
 
@@ -414,6 +447,7 @@ bool colorBipartite(const vector<vector<int>>& graph, vector<int>& color) {
 - 每轮 DFS 必须使用新的右部访问标记。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -425,15 +459,18 @@ struct BipartiteMatcher {
     vector<int> seen;       // 时间戳：本轮增广中右点是否已尝试
     int visitToken = 0;
 
+    // 参数 leftCount/rightCount 为左右部点数；创建空二分图并初始化匹配及访问时间戳。
     BipartiteMatcher(int leftCount, int rightCount)
         : leftCount(leftCount), rightCount(rightCount),
           graphLeft(leftCount + 1), matchRight(rightCount + 1, 0),
           seen(rightCount + 1, 0) {}
 
+    // 参数 left/right 分别为左右部合法点号；返回 void，将兼容边加入 graphLeft。
     void addEdge(int left, int right) {
         graphLeft[left].push_back(right);
     }
 
+    // 参数 u 是当前待匹配左点；返回是否找到增广路，成功时修改 matchRight 的匹配关系。
     bool augment(int u) {
         // 不变量：尝试为左点 u 找交错路；成功时沿递归链整体改配。
         for (int v : graphLeft[u]) {
@@ -448,6 +485,7 @@ struct BipartiteMatcher {
         return false;
     }
 
+    // 无参数；返回当前二分图最大匹配数，并在已有匹配上继续增广。
     int maximumMatching() {
         int matching = 0;
         for (int u = 1; u <= leftCount; ++u) {
@@ -470,6 +508,8 @@ struct BipartiteMatcher {
 - [OI Wiki：二分图最大匹配](https://oi-wiki.org/graph/graph-matching/bigraph-match/)
 
 ## 6.8 强连通分量（Tarjan）
+**适用范围：** 适用于有向图强连通分量划分与缩点。 **能做什么：** 在线性时间为每个点标记 SCC 编号。 **输入 / 输出：** 输入：1-based 有向邻接表；输出：各点分量编号和分量数。
+
 
 **问题与思路：** 把有向图分成最大强连通块，块内任意两点互相可达，常用于缩点成 DAG。DFS 记录访问次序 `dfn` 与能回到的最早次序 `low`；当 `low[u]==dfn[u]` 时弹栈得到一个分量。时间 $O(n+m)$、空间 $O(n+m)$。递归深度可达 $n$。
 
@@ -481,6 +521,7 @@ struct BipartiteMatcher {
 - 缩点时遍历原边；若两端分量不同，则加入分量间边并按需去重。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -492,11 +533,13 @@ struct TarjanSCC {
     vector<int> dfn, low, component, st;
     vector<char> inStack;
 
+    // 参数 graph 是 1-based 有向邻接表；保存其引用并分配 SCC 工作数组，图须长于对象生命周期。
     explicit TarjanSCC(const vector<vector<int>>& graph)
         : graph(graph), n((int)graph.size() - 1),
           dfn(n + 1, 0), low(n + 1, 0), component(n + 1, -1),
           inStack(n + 1, false) {}
 
+    // 参数 u 是未访问顶点；返回 void，递归遍历其可达区域并更新 dfn/low/栈/分量编号。
     void dfs(int u) {
         // st 只保存尚未归入任何 SCC 的活跃点，inStack 与之同步。
         dfn[u] = low[u] = ++timer;
@@ -526,6 +569,8 @@ struct TarjanSCC {
         }
     }
 
+    // 无参数；从所有未访问点启动 DFS 并写 component/componentCount；对象仅应运行一次。
+    // 无参数；遍历全部连通区域并填充 SCC 编号及数量；须在对象尚未运行时调用。
     void run() {
         for (int u = 1; u <= n; ++u) {
             if (dfn[u] == 0) dfs(u);
@@ -545,6 +590,8 @@ struct TarjanSCC {
 - [OI Wiki：强连通分量](https://oi-wiki.org/graph/scc/)
 
 ## 6.9 割点与桥（Tarjan）
+**适用范围：** 适用于无向图的割点、桥及非连通图分析。 **能做什么：** 在线性时间识别删点/删边会增加连通块数的对象。 **输入 / 输出：** 输入：点数及逐条添加的无向边；输出：割点标记和桥端点列表。
+
 
 **问题与思路：** 无向图中，删去某点使连通块增加则它是割点；删去某边使连通块增加则它是桥。DFS 计算 `dfn`、`low`：树边 `(u,v)` 满足 `low[v]>dfn[u]` 是桥；非根点存在 `low[v]>=dfn[u]` 则为割点，根需至少两个 DFS 子树。时间 $O(n+m)$。
 
@@ -556,6 +603,7 @@ struct TarjanSCC {
 - 非连通图会从每个未访问点重新 DFS。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -569,10 +617,12 @@ struct UndirectedLowlink {
     vector<char> isCutVertex;
     vector<pair<int, int>> bridges;
 
+    // 参数 n 为点数；初始化无向邻接表及割点/桥工作数组。
     explicit UndirectedLowlink(int n)
         : n(n), graph(n + 1), dfn(n + 1), low(n + 1),
           isCutVertex(n + 1, false) {}
 
+    // 参数 u/v 是 1..n 端点；返回 void，加入一条带共享边编号的无向边。
     void addEdge(int u, int v) {
         // 每条无向边只调用一次，内部自动加入 u->v 与 v->u 两个方向。
         graph[u].push_back({v, edgeCount});
@@ -580,6 +630,7 @@ struct UndirectedLowlink {
         ++edgeCount;
     }
 
+    // 参数 u 为当前点、parentEdge 为进入该点的边 id（根传 -1）；返回 void，写 lowlink 并追加割点/桥。
     void dfs(int u, int parentEdge) {
         // low[u]：从 u 的 DFS 子树经至多一条非树边能到达的最小 dfn。
         dfn[u] = low[u] = ++timer;
@@ -604,6 +655,7 @@ struct UndirectedLowlink {
         if (parentEdge == -1 && childCount >= 2) isCutVertex[u] = true;
     }
 
+    // 无参数；遍历无向图所有连通块并追加割点/桥结果；请在 addEdge 完成后调用一次。
     void run() {
         for (int u = 1; u <= n; ++u) {
             if (dfn[u] == 0) dfs(u, -1);
@@ -624,6 +676,8 @@ struct UndirectedLowlink {
 - [OI Wiki：割点和桥](https://oi-wiki.org/graph/cut/)
 
 ## 6.10 最近公共祖先（倍增 LCA）
+**适用范围：** 适用于静态连通树上反复查询祖先关系。 **能做什么：** O(log n) 查询两点最近公共祖先，并支持祖先提升。 **输入 / 输出：** 输入：1-based 无向树和根；输出：指定两点的 LCA 点编号。
+
 
 **问题与思路：** 在树上反复查询两点最深的公共祖先，也可据此求路径长度。预处理每个点的深度与第 $2^j$ 个祖先；查询时先把深点提升，再同步提升两点。预处理 $O(n\log n)$，单次查询 $O(\log n)$，空间 $O(n\log n)$。模板要求输入为一棵树。
 
@@ -635,6 +689,7 @@ struct UndirectedLowlink {
 - 根可任意选择；不同根会改变祖先关系，但不会改变无权路径长度。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -644,6 +699,7 @@ struct BinaryLiftingLCA {
     // up[j][u] 是 u 的第 2^j 个祖先；越过根后统一落到虚拟点 0。
     vector<vector<int>> up;
 
+    // 参数 tree 为 1-based 连通无向树、root 为合法根；预处理祖先表/深度，不修改 tree。
     BinaryLiftingLCA(const vector<vector<int>>& tree, int root) {
         // tree 是 1-based 无向树，必须双向加边且不能含环、重边或自环。
         n = (int)tree.size() - 1;
@@ -675,6 +731,7 @@ struct BinaryLiftingLCA {
         }
     }
 
+    // 参数 u 为树点、steps 在 0..depth[u]；返回向上 steps 步的祖先，不改预处理表。
     int lift(int u, int steps) const {
         // 按 steps 的二进制位拆分向上跳；调用者应保证 steps<=depth[u]。
         for (int j = 0; j < levels; ++j) {
@@ -683,6 +740,7 @@ struct BinaryLiftingLCA {
         return u;
     }
 
+    // 参数 u/v 为同一棵树内的点；返回最近公共祖先点号，不修改预处理表。
     int lca(int u, int v) const {
         // 先对齐深度，再从最高位向下保持“两点祖先仍不同”。
         if (depth[u] < depth[v]) swap(u, v);
@@ -712,6 +770,8 @@ struct BinaryLiftingLCA {
 - [OI Wiki：最近公共祖先](https://oi-wiki.org/graph/lca/)
 
 ## 6.11 树的直径
+**适用范围：** 适用于边权非负的树；无权树将每条边权设为 1。 **能做什么：** 求树中最长简单路径长度及两个端点。 **输入 / 输出：** 输入：1-based 连通带权树；输出：直径长度与端点。
+
 
 **问题与思路：** 树的直径是任意两点间最长简单路径。任选点出发找距离最远点 `a`，再从 `a` 找最远点 `b`，`dist[b]` 即直径；树上路径唯一，所以一次遍历即可算距离。时间 $O(n)$、空间 $O(n)$。两次遍历法适用于无负权树；无权树令边权为 1。
 
@@ -723,6 +783,7 @@ struct BinaryLiftingLCA {
 - 模板默认 `n>=1`，且所有边权非负、图连通并有 `n-1` 条边。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -734,6 +795,9 @@ struct TreeEdge {
     ll weight;
 };
 
+// 参数 tree 为 1-based 非负边权树、start 为树点；返回最远点及距离，使用局部遍历数组。
+    // 参数 tree 为 1-based 非负权连通树、start 为合法点；返回最远点和距离，仅分配局部数组。
+    // 参数 tree 为 1-based 非负权连通树、start 为合法点；返回最远点和距离，仅分配局部数组。
 pair<int, ll> farthestVertex(
     const vector<vector<TreeEdge>>& tree,
     int start
@@ -762,7 +826,8 @@ pair<int, ll> farthestVertex(
     return {vertex, distance[vertex]};
 }
 
-tuple<ll, int, int> treeDiameter(const vector<vector<TreeEdge>>& tree) {
+// 参数为 1-based 连通非负带权树且 n>=1；返回 {直径长度,端点a,端点b}，不改树。
+    tuple<ll, int, int> treeDiameter(const vector<vector<TreeEdge>>& tree) {
     // 第一次找直径某端点 a，第二次从 a 找另一端 b；返回 {长度,a,b}。
     auto [a, ignored] = farthestVertex(tree, 1);
     auto [b, diameter] = farthestVertex(tree, a);
@@ -781,6 +846,8 @@ tuple<ll, int, int> treeDiameter(const vector<vector<TreeEdge>>& tree) {
 - [OI Wiki：树的直径](https://oi-wiki.org/graph/tree-diameter/)
 
 ## 6.12 最大流（Dinic）
+**适用范围：** 适用于非负容量有向网络的最大流/最小割建模。 **能做什么：** 在残量网络上增广并返回最大可发送流量。 **输入 / 输出：** 输入：点数、容量边、不同的源点和汇点；输出：至多 limit 的流量，残量结构会被修改。
+
 
 **问题与思路：** 求有向容量网络从源点到汇点的最大可发送流量。残量网络中先 BFS 建分层图，再 DFS 沿层次递增边反复增广；当前弧避免重复扫描。一般复杂度 $O(V^2E)$，空间 $O(V+E)$，竞赛中常用于二分图匹配、资源分配和割模型。容量必须非负。
 
@@ -792,6 +859,7 @@ tuple<ll, int, int> treeDiameter(const vector<vector<TreeEdge>>& tree) {
 - `maxFlow(source,sink)` 返回最大流；若只需不超过某上限，可传 `limit`。
 
 ```cpp
+
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -809,9 +877,11 @@ struct Dinic {
     vector<int> level;          // 残量网络中从 source 出发的 BFS 层号，-1 为不可达
     vector<int> current;        // 当前弧：本轮分层图中每点尚未尝试的首条边
 
+    // 参数 n 为点数；初始化空残量网络、层次和当前弧数组。
     explicit Dinic(int n)
         : n(n), graph(n + 1), level(n + 1), current(n + 1) {}
 
+    // 参数为端点和非负容量；返回 void，加入正向边及零容量反向边，修改残量图。
     void addEdge(int from, int to, ll capacity) {
         // 加有向容量边 from->to；反向边初始容量为 0，只用于撤回已经发送的流。
         // 自环的两条边都进入同一 vector，正向边的反向下标要跳过自身。
@@ -821,6 +891,7 @@ struct Dinic {
         graph[to].push_back(backward);
     }
 
+    // 参数 source/sink 为合法点号；返回汇点是否可达，并重建 level 数组。
     bool buildLevelGraph(int source, int sink) {
         // 只沿正残量边 BFS；后续 DFS 只能走 level 恰好增加 1 的边。
         fill(level.begin(), level.end(), -1);
@@ -839,6 +910,7 @@ struct Dinic {
         return level[sink] != -1;
     }
 
+    // 参数 u/sink 为点号、pushed 为非负上限；返回实际发送量，并原地修改正反残量边。
     ll sendFlow(int u, int sink, ll pushed) {
         // 返回本次从 u 实际送到 sink 的流量；pushed 是上游允许的上限。
         if (u == sink || pushed == 0) return pushed;
@@ -856,6 +928,7 @@ struct Dinic {
         return 0;
     }
 
+    // 参数为不同源汇和非负流量上限；返回本次从当前残量网可增广流量，残量图被修改。
     ll maxFlow(int source, int sink, ll limit = INF) {
         // 要求 source!=sink、点编号 1..n；返回不超过 limit 的最大增广量。
         assert(source != sink);
@@ -888,10 +961,14 @@ struct Dinic {
 
 
 ## 6.13 欧拉路径与回路
+**适用范围：** 适用于判定条件满足的无向图边遍历任务。 **能做什么：** Hierholzer 算法构造每条边恰用一次的点序。 **输入 / 输出：** 输入：点数及每条无向边一次的边表；输出：成功时含 m+1 个点的欧拉点序，未覆盖全部边、度数条件不满足或无边时返回空数组；函数内部会检查是否消费全部边。
+
 
 **用途 / 用法：** 每条边恰走一次。下例 Hierholzer 求无向图边序对应的点序，$O(n+m)$；平行边靠边编号区分。
 
 ```cpp
+
+// 参数 n 为点数、edges 为每条无向边一次的端点表；返回全边欧拉点序，无欧拉遍历或非连通时为空。
 vector<int> eulerTrailUndirected(
     int n, const vector<pair<int, int>>& edges) {
     // Hierholzer 回溯入答案，末尾需 reverse；每条边只消费一次。
@@ -952,30 +1029,38 @@ vector<int> eulerTrailUndirected(
 坑：结果是逆序回退所得，最后反转；必须检查使用了全部边；无边图的返回约定按题意调整。
 
 ## 6.14 2-SAT
+**适用范围：** 适用于每个布尔变量含两个文字、每条约束为二文字析取的可满足性问题。 **能做什么：** 判断可满足并构造一组布尔赋值。 **输入 / 输出：** 输入：变量数及蕴含/二文字约束；输出：optional<vector<char>>，有解时含下标 1..n 的赋值，无解时为 nullopt。
+
 
 **用途 / 用法：** 每个布尔变量二选一、约束是两个文字的析取。建蕴含图后 SCC，$O(n+m)$。
 
 ```cpp
+
 struct TwoSAT {
     // 每个变量 x 有 false/true 两个文字节点；蕴含边记在 g 中。
     int vars;
     vector<vector<int>> g;
     TarjanSCC scc; // 复用 6.8 节实现；它保存 g 的引用，故 g 必须先声明
 
+    // 参数 n 为变量数；分配文字蕴含图及引用该图的 SCC 求解器。
     explicit TwoSAT(int n) : vars(n), g(2 * n + 1), scc(g) {}
 
+    // 参数 x 属于 1..vars、value 指定真假文字；返回对应 1-based 蕴含图节点号。
     int node(int x, bool value) const {
         return 2 * (x - 1) + (value ? 1 : 0) + 1;
     }
+    // 参数 a/b 为文字节点号；返回 void，向蕴含图添加有向边 a->b。
     void imply(int a, int b) {
         g[a].push_back(b);
     }
+    // 参数给出两个变量及各自文字真假值；返回 void，加入析取子句对应的两条蕴含边。
     void addOr(int x, bool xv, int y, bool yv) {
         // (x==xv) OR (y==yv) 等价于 ¬x->y 与 ¬y->x。
         int a = node(x, xv), b = node(y, yv);
         imply(node(x, !xv), b);
         imply(node(y, !yv), a);
     }
+    // 无参数；返回可满足赋值（下标 1..vars）或 nullopt；运行 SCC 并写内部分量状态，仅可运行一次。
     optional<vector<char>> solve() {
         scc.run();
         vector<char> answer(vars + 1);
@@ -993,10 +1078,13 @@ struct TwoSAT {
 坑：复用 6.8 节的 `TarjanSCC`；节点编号及分量编号方向必须一致；若更换 SCC 实现，需重新核对赋值比较方向。
 
 ## 6.15 最小费用最大流
+**适用范围：** 适用于带容量与单位费用的流网络，按最小费用发送尽可能多的流。 **能做什么：** 求指定上限内最大流量及该流量的最小费用。 **输入 / 输出：** 输入：点数、容量/费用边、源汇和流量上限；输出：流量与费用，残量结构会被修改。
+
 
 **用途 / 用法：** 在最大流量前提下最小化费用；逐次找残量网络最短增广路。此 SPFA 版最坏复杂度高，适合中小网络；要求 `s!=t`、费用与总代价可由 `long long` 表示，且增广过程中不存在可达负费用环。
 
 ```cpp
+
 struct MinCostMaxFlow {
     // 残量网络逐次找最短路，parent 回溯增广；反向边费用为负。
     struct E {
@@ -1005,15 +1093,18 @@ struct MinCostMaxFlow {
     };
     int n;
     vector<vector<E>> g;
+    // 参数 nodeCount 为点数；初始化空残量网络。
     explicit MinCostMaxFlow(int nodeCount)
         : n(nodeCount), g(nodeCount + 1) {
     }
+    // 参数为端点、非负容量和单位费用；返回 void，加入正向边与负费用反向残量边。
     void addEdge(int u, int v, ll cap, ll cost) {
         E a{v, (int)g[v].size() + (u == v), cap, cost};
         E b{u, (int)g[u].size(), 0, -cost};
         g[u].push_back(a);
         g[v].push_back(b);
     }
+    // 参数 s/t 为不同源汇、limit 为非负流量上限；返回本次 {流量,费用}，并修改残量图；须无可达负费用环。
     pair<ll, ll> run(int s, int t, ll limit = LLONG_MAX / 4) {
         assert(s != t);
         ll flow = 0;

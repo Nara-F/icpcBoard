@@ -2,6 +2,11 @@
 
 ## 3.1 复杂度与枚举
 
+**适用范围：** 枚举有限状态/子集；子集和用 O(2^n) 空间时间。输入 vector<long long>，输出所有子集和；位掩码只适用于 n 小且移位不溢出的范围。
+**能做什么：** 枚举所有子集和，或列出一个掩码的全部非空子掩码。
+**输入 / 输出：** 输入 0-based long long 数组或非负掩码；返回子集和数组或非空子掩码列表。
+**复杂度：** O(2^n).
+
 **用途：** 先估算可执行次数，再选择枚举对象：约 $10^8$ 次简单操作通常已接近上限。直接枚举为 $O(n^k)$，位掩码枚举全部子集为 $O(2^n)$、空间 $O(1)$；只枚举固定大小组合可减少无效状态。适用于数据范围较小或作为对拍暴力。
 
 **思路：**
@@ -18,6 +23,7 @@
 using namespace std;
 
 // 枚举 n 个元素的全部子集，并计算每个子集的元素和。
+// 参数：a 为 0-based 整数数组。返回：每个掩码对应的子集和，空集和为 0。效果：无副作用；要求 a.size() 可安全作为位掩码宽度。
 vector<long long> enumerateSubsetSums(const vector<long long>& a) {
     int n = static_cast<int>(a.size());
     // a 使用 0-based；sums[mask] 表示恰好选择 mask 中元素的总和。
@@ -31,6 +37,7 @@ vector<long long> enumerateSubsetSums(const vector<long long>& a) {
 }
 
 // 枚举 mask 的所有非空子集。
+// 参数：非负集合掩码 mask。返回：mask 的所有非空子掩码。效果：无副作用。
 vector<int> nonemptySubmasks(int mask) {
     vector<int> result;
     // 每次删去 sub 的最低位并只保留 mask 中的位；0 不在返回结果中。
@@ -54,6 +61,11 @@ vector<int> nonemptySubmasks(int mask) {
 
 ## 3.2 前缀和与差分
 
+**适用范围：** 静态区间和与区间加差分；前缀查询 O(1)，差分恢复 O(n)。输入按约定下标数组及合法闭区间，输出区间和或恢复后的数组。
+**能做什么：** 计算静态区间和、批量区间加后恢复数组、查询二维矩形和。
+**输入 / 输出：** 1D 使用 1-based 闭区间；2D 使用 1-based 闭矩形；返回区间和或恢复数组。
+**复杂度：** O(n) build / O(1) query.
+
 **用途：** 前缀和把静态区间和查询化为两个前缀之差，预处理 $O(n)$、单次查询 $O(1)$、空间 $O(n)$。差分把离线区间加转为两个端点修改，单次修改 $O(1)$，最后 $O(n)$ 还原。若修改与查询交错，应改用树状数组或线段树。
 
 **思路：**
@@ -75,12 +87,14 @@ struct PrefixSum1D {
     // 输入与查询均为 1-based；prefix[0] 是空前缀哨兵。
     vector<ll> prefix;
 
+    // 参数：含 0 下标哨兵的 1-based 数组 a[1..n]。返回：构造前缀和对象。效果：O(n) 初始化，仅保存汇总。
     explicit PrefixSum1D(const vector<ll>& a) {
         int n = static_cast<int>(a.size()) - 1; // a[1..n]
         prefix.assign(n + 1, 0);
         for (int i = 1; i <= n; ++i) prefix[i] = prefix[i - 1] + a[i];
     }
 
+    // 参数：1-based 闭区间 [left,right]。返回：该区间元素和。效果：只读；要求区间在构造数组范围内。
     ll query(int left, int right) const {
         // 返回闭区间 [left, right]，调用者需保证 1 <= left <= right <= n。
         return prefix[right] - prefix[left - 1];
@@ -91,17 +105,20 @@ struct Difference1D {
     int n;
     vector<ll> diff;
 
+    // 参数：含哨兵的 1-based 初始数组。返回：差分对象。效果：O(n) 初始化，后续 add 记录闭区间加法。
     explicit Difference1D(const vector<ll>& a)
         : n(static_cast<int>(a.size()) - 1), diff(n + 2, 0) {
         for (int i = 1; i <= n; ++i) diff[i] = a[i] - a[i - 1];
     }
 
+    // 参数：1-based 闭区间及增量 value。返回：无。效果：记录区间加法，须在 build 前调用。
     void add(int left, int right, ll value) {
         // 闭区间 [left, right] 加 value；diff[n+1] 承接右端撤销标记。
         diff[left] += value;
         diff[right + 1] -= value;
     }
 
+    // 参数：无。返回：应用所有已记录区间加法后的 1-based 数组。效果：只读，不清空差分状态。
     vector<ll> build() const {
         // 所有离线修改完成后再还原；result 仍为 1-based。
         vector<ll> result(n + 1, 0);
@@ -114,6 +131,7 @@ struct PrefixSum2D {
     // a 的有效区域为 [1..n] x [1..m]，第 0 行和第 0 列是容斥哨兵。
     vector<vector<ll>> prefix;
 
+    // 参数：1-based 矩阵，0 行/列作为哨兵。返回：构造二维前缀和对象。效果：O(nm) 初始化。
     explicit PrefixSum2D(const vector<vector<ll>>& a) {
         int n = static_cast<int>(a.size()) - 1;
         int m = static_cast<int>(a[0].size()) - 1;
@@ -126,6 +144,7 @@ struct PrefixSum2D {
         }
     }
 
+    // 参数：1-based 闭矩形 [x1..x2]×[y1..y2]。返回：矩形元素和。效果：只读。
     ll query(int x1, int y1, int x2, int y2) const {
         // 返回闭矩形 [x1..x2] x [y1..y2]，调用者需保证坐标顺序合法。
         return prefix[x2][y2] - prefix[x1 - 1][y2]
@@ -146,6 +165,11 @@ struct PrefixSum2D {
 
 ## 3.3 二分查找与二分答案
 
+**适用范围：** 已排序查找或单调判定函数的整数答案；二分 O(log 范围) 次判定。输入有效边界与单调谓词，输出首个/末个满足边界；无解须由调用方预先界定。
+**能做什么：** 在排序序列找边界，或对单调谓词求首个/最后一个真值。
+**输入 / 输出：** 输入有效边界和假转真/真转假的单调谓词；无解分别返回 right+1/left-1。
+**复杂度：** O(log n) predicate checks.
+
 **用途：** 在有序序列查找边界，或答案存在“左侧均可行、右侧均不可行”等单调性时使用。维护一真一假的边界，每次检查中点并舍弃一半区间。整数二分需 $O(\log R)$ 次检查、空间 $O(1)$；总复杂度还要乘 `check` 的复杂度。
 
 **思路：**
@@ -164,6 +188,7 @@ using namespace std;
 using ll = long long;
 
 template <class Check>
+// 参数：闭区间边界及单调谓词（假到真）。返回：首个为真的值；无解返回 right+1。效果：调用谓词 O(log范围) 次。
 ll firstTrue(ll left, ll right, Check check) {
     // 闭区间内要求答案存在，且 check 呈 false...false,true...true。
     while (left < right) {
@@ -176,6 +201,7 @@ ll firstTrue(ll left, ll right, Check check) {
 }
 
 template <class Check>
+// 参数：闭区间边界及单调谓词（真到假）。返回：最后一个为真的值；无解返回 left-1。效果：调用谓词 O(log范围) 次。
 ll lastTrue(ll left, ll right, Check check) {
     // 闭区间内要求答案存在，且 check 呈 true...true,false...false。
     while (left < right) {
@@ -200,6 +226,11 @@ ll lastTrue(ll left, ll right, Check check) {
 
 ## 3.4 双指针与滑动窗口
 
+**适用范围：** 窗口可由双指针单向维护时适用；和阈值模板要求数组元素非负且 `target>0`。输入数组及目标，输出最长长度或最短长度；不存在时返回 0。
+**能做什么：** 求最长互异子数组，或非负数组中和至少为目标的最短子数组。
+**输入 / 输出：** 输入整数数组及 target；返回长度；最短窗口不存在时返回 0，`target<=0` 时非空数组返回 1、空数组返回 0。
+**复杂度：** O(n).
+
 **用途：** 当区间随右端扩张后，合法性关于左端具有单调性时，用左右指针维护连续区间；每个元素至多进出窗口一次，时间 $O(n)$、空间由维护信息决定。常用于非负数组和、至多含若干种元素、去重窗口；有负数时“和越长越大”不成立。
 
 **思路：**
@@ -216,6 +247,7 @@ ll lastTrue(ll left, ll right, Check check) {
 using namespace std;
 
 // 最长无重复连续子数组长度，元素值无需预先离散化。
+// 参数：整数数组。返回：元素互异的最长连续子数组长度。效果：无副作用，O(n)。
 int longestDistinctSubarray(const vector<int>& a) {
     // a 使用 0-based；每轮收缩后窗口 [left, right] 始终不含重复值。
     unordered_map<int, int> count;
@@ -233,7 +265,9 @@ int longestDistinctSubarray(const vector<int>& a) {
 }
 
 // 非负数组中，和至少为 target 的最短非空连续子数组长度；不存在返回 0。
+// 参数：非负数组 a 与目标和 target。返回：和至少为 target 的最短非空子数组长度；不存在返回 0。效果：无副作用，O(n)。
 int minLengthAtLeast(const vector<long long>& a, long long target) {
+    if (target <= 0) return a.empty() ? 0 : 1;
     // 仅适用于非负数组；非负性保证收缩左端不会漏过更短可行窗口。
     long long sum = 0;
     int answer = static_cast<int>(a.size()) + 1;
@@ -261,6 +295,11 @@ int minLengthAtLeast(const vector<long long>& a, long long target) {
 
 ## 3.5 离散化
 
+**适用范围：** 把可比较值映射为保持大小次序的紧凑整数编号；排序 O(n log n)。输入原值，输出 0-based 编号/去重值表；仅适用于查询构造时收录过的值；对未收录值，`id` 返回插入位置而非查找失败信号。
+**能做什么：** 把离线值映射为排序去重后的紧凑编号。
+**输入 / 输出：** 构造时输入全体候选值；id 仅要求返回 0-based 插入位置，value(id) 要求有效编号，size 返回不同值数。
+**复杂度：** O(n log n).
+
 **用途：** 只关心数值的大小、相等关系，而原值范围很大时，将出现过的值排序去重后映射到连续编号。建表 $O(n\log n)$，每次查询 $O(\log n)$，空间 $O(n)$。适用于树状数组、线段树和扫描线；若数值间距离有意义，不能直接用名次替代。
 
 **思路：**
@@ -281,22 +320,27 @@ struct Discretizer {
     // values[id] 保存第 id 小的不同原值；编号统一为 0-based。
     vector<T> values;
 
+    // 参数：所有将参与查询的原值。返回：初始化后的离散化表。效果：排序并去重，O(n log n)。
+    // 参数：所有后续查询可能出现的值。返回：初始化对象。效果：排序去重，O(n log n)。
     explicit Discretizer(vector<T> allValues) : values(move(allValues)) {
         sort(values.begin(), values.end());
         // unique 只压缩有效前缀；erase 同步缩小编号域。
         values.erase(unique(values.begin(), values.end()), values.end());
     }
 
+    // 参数：原值。返回：排序去重后的 0-based 插入位置；调用者应保证该值已收录。效果：只读。
     int id(const T& value) const {
         // value 应在建表输入中出现；否则返回的只是它的插入位置。
         return static_cast<int>(lower_bound(values.begin(), values.end(), value)
                                 - values.begin());
     }
 
+    // 参数：有效 0-based 编号。返回：对应原值常量引用。效果：只读。
     const T& value(int id) const {
         return values[id];
     }
 
+    // 参数：无。返回：去重值数量。效果：只读，O(1)。
     int size() const {
         return static_cast<int>(values.size());
     }
@@ -315,6 +359,11 @@ struct Discretizer {
 
 ## 3.6 分治与归并计数
 
+**适用范围：** 可将问题拆为两个子区间并合并时适用；归并 O(n log n)。输入可随机访问数组，输出排序结果或逆序对数。
+**能做什么：** 归并排序并统计逆序对。
+**输入 / 输出：** 输入数组及半开区间；返回逆序对数并原地排序相应范围。
+**复杂度：** O(n log n).
+
 **用途：** 分治把问题拆成互不重叠的同类子问题，递归求解后合并。典型归并排序与逆序对计数：左右两半已排序时，若右元素更小，它与左侧剩余元素都构成逆序对。时间 $O(n\log n)$，辅助空间 $O(n)$，递归栈 $O(\log n)$。
 
 **思路：**
@@ -332,6 +381,7 @@ using namespace std;
 
 using ll = long long;
 
+// 参数：数组、同长临时区及半开下标区间 [left,right)。返回：该区间逆序对数。效果：原地排序 a[left..right)，递归 O(n log n)。
 ll mergeCount(vector<ll>& a, vector<ll>& temp, int left, int right) {
     // 全函数统一使用左闭右开区间 [left, right)。
     if (right - left <= 1) return 0;
@@ -356,6 +406,7 @@ ll mergeCount(vector<ll>& a, vector<ll>& temp, int left, int right) {
     return answer;
 }
 
+// 参数：可修改整数数组。返回：逆序对数量。效果：将 a 升序重排，O(n log n)。
 ll countInversions(vector<ll>& a) {
     vector<ll> temp(a.size());
     return mergeCount(a, temp, 0, static_cast<int>(a.size()));
@@ -373,6 +424,11 @@ ll countInversions(vector<ll>& a) {
 - [OI Wiki：递归与分治](https://oi-wiki.org/basic/divide-and-conquer/)
 
 ## 3.7 贪心与区间调度
+
+**适用范围：** 半开区间 `[left,right)` 的无权最大不相交选择；相接端点允许兼选。输入区间及调用方提供的原始 id，输出所选原始 id。复杂度 O(n log n)。
+**能做什么：** 按结束位置贪心选择最多个互不重叠区间。
+**输入 / 输出：** 输入 `Interval{left,right,id}` 列表；返回被选区间原始 `id`，空输入返回空向量。
+**复杂度：** O(n log n).
 
 **用途：** 贪心每步选择当前看来最优且可证明不损失全局最优的决策。典型最多不相交区间：按右端点升序，依次选择起点不早于上个终点的区间。排序 $O(n\log n)$、扫描 $O(n)$、空间 $O(n)$。套用前需用交换论证或反证证明选择安全。
 
@@ -394,8 +450,10 @@ struct Interval {
     int id;
 };
 
+// 参数：半开区间列表，id 由调用者提供。返回：所选区间的原始 id。效果：复制并排序输入，O(n log n)。
 vector<int> maximumNonOverlapping(vector<Interval> intervals) {
     // 输入按半开区间 [left, right)；返回原输入 id，而不是排序后位置。
+    // 比较器参数：两个区间。返回：先按 right、再按 left 升序的严格次序；无外部副作用。
     sort(intervals.begin(), intervals.end(), [](const Interval& a, const Interval& b) {
         if (a.right != b.right) return a.right < b.right;
         return a.left < b.left; // 同终点时固定次序，便于复现与检查
@@ -426,6 +484,11 @@ vector<int> maximumNonOverlapping(vector<Interval> intervals) {
 
 ## 3.8 DFS 深度优先搜索
 
+**适用范围：** 图遍历、可达性和连通分量；邻接表 DFS O(V+E)。输入 1..n 编号图和起点，输出访问序或分量；无向图分量代码按无向邻接表使用。
+**能做什么：** 从起点 DFS 遍历及无向图连通分量划分。
+**输入 / 输出：** 输入 1..n 邻接表和起点；返回访问序或分量列表。
+**复杂度：** O(V+E).
+
 **用途：** DFS 沿一条分支走到底再回退，适合连通块、可达性、环检测及需要回溯的状态搜索。邻接表图遍历时间 $O(n+m)$、空间 $O(n+m)$，递归栈最坏 $O(n)$。一般图必须记录访问状态；深链可能爆栈，可改显式栈。
 
 **思路：**
@@ -441,12 +504,14 @@ vector<int> maximumNonOverlapping(vector<Interval> intervals) {
 #include <bits/stdc++.h>
 using namespace std;
 
+// 参数：1..n 编号图且 1<=start<=n。返回：从起点可达点的 DFS 顺序。效果：只读图，O(V+E)。
 vector<int> dfsFrom(int start, const vector<vector<int>>& graph) {
     // graph 与节点均为 1-based；环、重边与边方向由建图方式决定。
     int n = static_cast<int>(graph.size()) - 1;
     vector<char> visited(n + 1, false);
     vector<int> order;
 
+    // 参数：当前顶点 u。返回：无。效果：递归标记可达点并追加到外层 order。
     function<void(int)> dfs = [&](int u) {
         // 必须在递归邻点前标记，防止沿环或重边再次进入 u。
         visited[u] = true;
@@ -460,6 +525,7 @@ vector<int> dfsFrom(int start, const vector<vector<int>>& graph) {
     return order;
 }
 
+// 参数：无向图邻接表，点编号 1..n。返回：各连通分量的点集。效果：只读图，O(V+E)。
 vector<vector<int>> connectedComponents(const vector<vector<int>>& graph) {
     // 仅用于无向图连通分量；有向图不能据此求强连通或弱连通。
     int n = static_cast<int>(graph.size()) - 1;
@@ -501,6 +567,11 @@ vector<vector<int>> connectedComponents(const vector<vector<int>>& graph) {
 
 ## 3.9 BFS 广度优先搜索
 
+**适用范围：** 无权图最短路；BFS O(V+E)。输入邻接表和起点，输出距离/父节点；不可达距离为 -1，路径恢复对不可达点返回空。
+**能做什么：** 求无权图单源最短距离并恢复路径。
+**输入 / 输出：** 输入 1..n 邻接表和源/目标；不可达距离为 -1，路径恢复返回空向量。
+**复杂度：** O(V+E).
+
 **用途：** BFS 用队列按层扩展状态，在每条边代价相同的图中可求起点到各点的最少边数，并记录前驱还原路径。邻接表实现时间 $O(n+m)$、空间 $O(n+m)$。边权不全相等时不能直接使用；权值仅为 0/1 时可用双端队列优化。
 
 **思路：**
@@ -521,6 +592,7 @@ struct BFSResult {
     vector<int> parent;
 };
 
+// 参数：1-based 单位边权图及一个或多个源点。返回：每点最短边数与父节点；不可达距离为 -1。效果：O(V+E)，只读图。
 BFSResult bfs(const vector<vector<int>>& graph, const vector<int>& sources) {
     // graph 与节点为 1-based；仅保证单位边权图上的最少边数。
     int n = static_cast<int>(graph.size()) - 1;
@@ -547,6 +619,7 @@ BFSResult bfs(const vector<vector<int>>& graph, const vector<int>& sources) {
     return {distance, parent};
 }
 
+// 参数：目标点及 BFS 的 parent/distance 结果。返回：起点到目标的点序列；不可达返回空。效果：只读结果，O(路径长度)。
 vector<int> restorePath(int target, const BFSResult& result) {
     // 不可达返回空数组；否则沿 parent 回到某个源点并反转为正向路径。
     if (result.distance[target] == -1) return {};
@@ -570,11 +643,16 @@ vector<int> restorePath(int target, const BFSResult& result) {
 
 ## 3.10 回溯与剪枝
 
+**适用范围：** 解空间可逐步构造且能安全剪枝时适用；最坏指数时间。输入元素与目标，输出一个可行子集或空结果；剪枝条件必须不排除有效解。
+**能做什么：** 用回溯搜索一个满足目标和的子集。
+**输入 / 输出：** 输入非负数组与目标；返回一个解的元素值，未找到返回空；剪枝基于非负性。
+**复杂度：** 指数级最坏情况.
+
 **用途：** 回溯按决策树枚举方案，尝试一个选择、递归、再撤销；剪枝提前排除不可能或不优的分支。最坏仍为指数或阶乘复杂度，空间通常为递归深度。适合规模小的排列、组合和约束满足；应优先安排限制强的决策并设计可证明安全的剪枝。
 
 **思路：**
 
-- 模板示例求所有数恰好使用一次、和为 `target` 的可行排列，找到一个即停止。
+- 模板示例从输入元素中选取一个子集使和为 `target`，每个位置至多选一次，找到一组即停止。
 - 仅当所有数非负时，`sum > target` 和“剩余和不足”剪枝才成立。
 - 先排序，使相同数字相邻，从而跳过同层重复选择。
 - 若要枚举全部方案，找到答案后保存并继续搜索，不要立即返回。
@@ -586,6 +664,7 @@ vector<int> restorePath(int target, const BFSResult& result) {
 using namespace std;
 
 // 找到一个和恰为 target 的子集，返回其元素；要求 a 中元素非负。
+// 参数：整数数组与目标和。返回：一组和为 target 的元素值；无解返回空。效果：复制输入并指数搜索；适用非负数剪枝条件。
 vector<int> subsetSumBacktracking(vector<int> a, long long target) {
     // a 必须全为非负数；返回任意可行子集，空数组也可能是合法答案。
     sort(a.rbegin(), a.rend()); // 大数优先，通常更早触发剪枝
@@ -595,6 +674,7 @@ vector<int> subsetSumBacktracking(vector<int> a, long long target) {
     for (int i = n - 1; i >= 0; --i) suffix[i] = suffix[i + 1] + a[i];
 
     vector<int> path, answer;
+    // 参数：下一候选下标与当前和。返回：是否找到解。效果：修改外层 path/answer，成功时保留答案。
     function<bool(int, long long)> dfs = [&](int index, long long sum) {
         if (sum == target) {
             answer = path;
@@ -632,12 +712,17 @@ vector<int> subsetSumBacktracking(vector<int> a, long long target) {
 
 ## 3.11 折半搜索
 
+**适用范围：** n 约 40、元素非负且上限 `limit>=0` 的子集和最大化；两半枚举约 O(2^(n/2)) 空间。
+**能做什么：** 两半枚举合并，求不超过上限的最大子集和。
+**输入 / 输出：** 输入 long long 数组及非负上限；返回不超过上限的最大子集和，允许空集，故总有解且答案至少为 0。
+**复杂度：** 时间 O(n·2^(n/2))，空间 O(2^(n/2))。
+
 **用途：** 折半搜索把 $n$ 个决策分成两半，各自枚举约 $2^{n/2}$ 个状态，再排序、二分或双指针合并。适合 $n\approx40$ 的子集和、计数和最优化；时间通常 $O(2^{n/2}n)$，空间 $O(2^{n/2})$。它以额外内存换取指数规模的平方根级下降。
 
 **思路：**
 
 - `maximumSubsetSumNotExceeding` 求不超过 `limit` 的最大子集和。
-- 模板要求元素非负；若允许负数，仍可枚举，但“无可行解”的返回约定需调整。
+- 模板要求元素非负且 `limit>=0`；因此空集总是可行。若允许负数，仍可枚举，但剪枝和返回约定需调整。
 - 两半分别生成子集和，右半排序后对每个左半和做 `upper_bound`。
 - 若要求方案，子集和需同时保存对应掩码。
 
@@ -649,6 +734,7 @@ using namespace std;
 
 using ll = long long;
 
+// 参数：数组与半开下标区间 [left,right)。返回：该半区间所有子集和。效果：无副作用，空间 O(2^k)。
 vector<ll> allSubsetSums(const vector<ll>& a, int left, int right) {
     // a 使用 0-based，枚举左闭右开区间 [left, right) 的全部子集和。
     vector<ll> sums{0};
@@ -660,6 +746,7 @@ vector<ll> allSubsetSums(const vector<ll>& a, int left, int right) {
     return sums;
 }
 
+// 参数：非负整数数组及 limit>=0。返回：不超过 limit 的最大子集和，允许空集故结果至少为 0。效果：O(2^(n/2) log 2^(n/2))。
 ll maximumSubsetSumNotExceeding(const vector<ll>& a, ll limit) {
     // 元素要求非负；返回不超过 limit 的最大子集和，默认空集给出 0。
     int mid = static_cast<int>(a.size()) / 2;
@@ -690,6 +777,11 @@ ll maximumSubsetSumNotExceeding(const vector<ll>& a, ll limit) {
 
 ## 3.12 0-1 BFS
 
+**适用范围：** 边权只为 0 或 1 的最短路；双端队列 O(V+E)。输入 1..n 编号图和起点，输出距离；不可达值为 INF。
+**能做什么：** 在 0/1 权图求单源最短距离。
+**输入 / 输出：** 输入 n、1..n 编号 0/1 权图及源点；返回距离数组，不可达为 INF。
+**复杂度：** O(V+E).
+
 **用途与复杂度。** 边权只取 0 或 1 的单源最短路可用双端队列在线处理：松弛到 0 边的新点放队首，1 边放队尾。时间 $O(n+m)$，空间 $O(n)$；一般非负边权应使用 Dijkstra。
 
 **思路与用法。** 邻接表按 1-based 点编号，权值必须是 0 或 1。队列允许同一顶点多次入队；每次弹出时用当前最短距离松弛邻边。
@@ -705,6 +797,7 @@ struct Edge01 {
     int weight; // 必须为 0 或 1
 };
 
+// 参数：1..n 点的 0/1 权有向图与起点。返回：最短距离，未达点为 INF。效果：只读图，O(V+E)。
 vector<int> zeroOneBfs(int n, const vector<vector<Edge01>>& graph, int source) {
     const int INF = numeric_limits<int>::max() / 4;
     vector<int> dist(n + 1, INF); // 点编号 1..n；不可达保持 INF
@@ -729,3 +822,56 @@ vector<int> zeroOneBfs(int n, const vector<vector<Edge01>>& graph, int source) {
 ```
 
 **易错点。** 权值出现 2 或负数时该策略不再保证最短路；只在松弛成功后入队；不要在入队时永久标记 visited，因为后续可能找到更短距离。
+
+## 3.13 常用构造题思路 {#constructive-algorithms}
+
+**适用范围：** 输出一个满足条件的对象，且可从不变量、奇偶性、极值或递推关系直接拼出候选解。
+**能做什么：** 用奇偶/模类分类、排序交错、分组配对、反向构造或归纳递推设计答案；图构造先核对度数和连通性。
+**输入 / 输出：** 先明确实例参数和可行条件，再输出构造对象；本节代码构造 n 个互异正整数，使其和为 S。
+**复杂度：** 示例 O(n) 时间、O(n) 空间。
+
+常见构造策略应对应可验证的题面信号：
+
+| 思路 | 适用信号与小例 | 限制与检查 |
+|---|---|---|
+| 不变量（奇偶/模类） | 每步同时将两个数各加 1，总和增加 2，所以总和奇偶不变；若初始总和为偶数，目标奇数不可达 | 只给出不可能性判定，需从操作定义证明不变量确实保持 |
+| 奇偶分组 | 需排列 1..n 且避免相邻差 1；n>=4 时先放偶数再放奇数并检查两个拼接边界 | n<4 单独处理；仍须逐项检查相邻差 |
+| 分组配对 | 需让配对和相同；将 1..2k 配为 (i, 2k+1-i)，每对和为 2k+1 | 检查每个数恰用一次；额外范围/配对限制需另证 |
+| 反向构造 | 目标最后一步容易确定；从目标状态删除一个元素倒推前态 | 倒推必须终止且每步可逆/保持可行 |
+| 归纳递推 | 构造树可从单点开始，每次添加一个新顶点并连一条边；连通且无环保持，边数始终为顶点数减一 | 该扩展构造只覆盖树；额外度数限制需单独验证 |
+| 图的度数/连通性 | 题目要求给定度数序列或连通图；先检查度数和为偶数 | 度数和偶数仅为必要条件；还需验证度数上界及连通性 |
+
+这些方法依赖具体限制，不能只凭模式猜测；给出不变量证明，并对小规模枚举核验。
+
+例：构造 n>=1 个互不相同的正整数且总和为 S。可行当且仅当 `S >= n(n+1)/2`（假设 n>=1）。从 `[1,2,...,n]` 开始，把多余量全部加到最大元素；它仍大于其余元素，因此互异性保持。下面的验算枚举小 n、S，检查可行性和输出性质。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+
+// 参数：正整数个数 n 与目标和 S。返回：构造数组；不可行返回空。效果：无副作用，O(n)。
+vector<long long> constructDistinctPositive(int n, long long sum) {
+    if (n <= 0 || sum < 1LL * n * (n + 1LL) / 2) return {};
+    vector<long long> a(n);
+    iota(a.begin(), a.end(), 1LL);
+    a.back() += sum - 1LL * n * (n + 1LL) / 2;
+    return a;
+}
+
+// 参数：无。返回：进程状态 0 表示所有小规模构造验算通过。效果：断言检查可行性、互异、正数和总和。
+int main() {
+    for (int n = 1; n <= 8; ++n) {
+        for (long long sum = 1; sum <= 80; ++sum) {
+            auto a = constructDistinctPositive(n, sum);
+            bool possible = sum >= 1LL * n * (n + 1LL) / 2;
+            assert(static_cast<int>(a.size()) == (possible ? n : 0));
+            if (possible) {
+                set<long long> unique(a.begin(), a.end());
+                assert(static_cast<int>(unique.size()) == n);
+                assert(*min_element(a.begin(), a.end()) > 0);
+                assert(accumulate(a.begin(), a.end(), 0LL) == sum);
+            }
+        }
+    }
+}
+```

@@ -2,6 +2,11 @@
 
 ## 4.1 DP 入门：状态、转移与顺序
 
+**适用范围：** 存在按依赖顺序计算的状态时适用；复杂度为状态数乘转移数。输入状态定义与初值，输出目标状态值；必须说明不可达初值及计算顺序。
+**能做什么：** 计算不相邻选数的最大和并恢复一组下标。
+**输入 / 输出：** 输入 value[1..n]；返回 maximumSum 与 1-based chosenIndices，允许空选，故全负答案为 0。
+**复杂度：** 状态数 × 转移数.
+
 **用途：** 动态规划适合具有最优子结构和重复子问题的计数、可行性或最优化问题。先定义状态含义，再写转移、初值和计算顺序；每个状态只算一次。若状态数为 $S$、每个状态枚举 $T$ 个转移，时间 $O(ST)$、空间 $O(S)$，可按依赖关系滚动压缩。
 
 **思路：**
@@ -24,6 +29,7 @@ struct LineDPResult {
     vector<int> chosenIndices; // 1-based
 };
 
+// 参数：value[1..n] 的 long long 权值。返回：最大和与一组 1-based 互不相邻下标；允许空选。效果：O(n) 时间、空间。
 LineDPResult maximumNonAdjacentSum(const vector<ll>& value) {
     // value 使用 1-based；dp[i] 表示前 i 个位置允许空选时的最大和。
     int n = static_cast<int>(value.size()) - 1; // value[1..n]
@@ -66,6 +72,11 @@ LineDPResult maximumNonAdjacentSum(const vector<ll>& value) {
 
 ## 4.2 0-1 背包
 
+**适用范围：** 每件物品最多取一次的容量优化；时间 O(nC)。输入重量/价值与容量 C，输出最大价值；非负重量且 C 可分配，压缩数组时容量倒序。
+**能做什么：** 求容量不超过 C 的 0-1 背包值，或可选 exact 版本求恰好装满。
+**输入 / 输出：** 输入平行的 0-based 重量/价值数组及容量；返回最大价值；exact 版无法恰好装满时返回空 optional。
+**复杂度：** O(nC).
+
 **用途：** 有 $n$ 件物品，每件至多选一次，求容量不超过 $W$ 时的最大价值。令 `dp[j]` 为容量上限为 `j` 的最大价值；处理物品时容量必须倒序，避免同一物品重复使用。时间 $O(nW)$、空间 $O(W)$，适合容量不大且重量为非负整数的题目。
 
 **思路：**
@@ -83,6 +94,7 @@ using namespace std;
 
 using ll = long long;
 
+// 参数：平行的重量/价值数组与容量；每件至多取一次。返回：不超过容量的最大价值。效果：O(nC)，要求容量非负。
 ll zeroOneKnapsack(const vector<int>& weight,
                    const vector<ll>& value,
                    int capacity) {
@@ -98,6 +110,7 @@ ll zeroOneKnapsack(const vector<int>& weight,
 }
 
 // 恰好装满时的最大价值；不可达返回 nullopt。
+// 参数：平行的重量/价值数组及非负容量；每件至多取一次。返回：恰好装满的最大价值，无解为空。效果：O(nC)。
 optional<ll> exactZeroOneKnapsack(const vector<int>& weight,
                                   const vector<ll>& value,
                                   int capacity) {
@@ -130,6 +143,11 @@ optional<ll> exactZeroOneKnapsack(const vector<int>& weight,
 
 ## 4.3 完全背包与多重背包
 
+**适用范围：** 完全背包允许每件任取次数，多重背包有数量上限；前者 O(nC)，后者二进制拆分 O(CΣlog count)。输入物品与容量，输出最优值；循环方向决定取用次数语义。
+**能做什么：** 求完全背包或有限数量多重背包最大价值。
+**输入 / 输出：** 输入平行重量/价值/数量数组及容量；返回最大价值；完全背包每件可无限取。
+**复杂度：** O(nC) 或 O(CΣlog count).
+
 **用途：** 完全背包中每件物品可选无限次，容量正序转移；多重背包限制第 $i$ 件最多选 $c_i$ 次，可按二进制拆成 $O(\log c_i)$ 件 0-1 物品。完全背包时间 $O(nW)$；二进制多重背包时间 $O(W\sum\log c_i)$，空间均为 $O(W)$。
 
 **思路：**
@@ -147,6 +165,7 @@ using namespace std;
 
 using ll = long long;
 
+// 参数：平行重量/价值数组与容量；每件可无限取。返回：不超过容量的最大价值。效果：O(nC)，重量须为正。
 ll completeKnapsack(const vector<int>& weight,
                     const vector<ll>& value,
                     int capacity) {
@@ -161,6 +180,7 @@ ll completeKnapsack(const vector<int>& weight,
     return dp[capacity];
 }
 
+// 参数：重量、价值、数量上限数组与容量。返回：不超过容量的最大价值。效果：二进制拆分，O(CΣlog count)。
 ll multipleKnapsack(const vector<int>& weight,
                     const vector<ll>& value,
                     const vector<int>& count,
@@ -200,6 +220,11 @@ ll multipleKnapsack(const vector<int>& weight,
 
 ## 4.4 最长上升子序列（LIS）
 
+**适用范围：** 求一个最长严格递增子序列及其下标；O(n log n)。输入任意可比较序列，输出 0-based 下标序列，空输入返回空序列。
+**能做什么：** 恢复一个最长严格递增子序列的下标。
+**输入 / 输出：** 输入可严格比较序列；返回递增的 0-based 下标向量，空输入返回空。
+**复杂度：** O(n log n).
+
 **用途：** 求序列中下标递增且值严格递增的最长子序列。维护 `tail[len]`：长度为 `len+1` 的上升子序列可取得的最小末尾值；对每个数用 `lower_bound` 替换首个不小于它的位置。时间 $O(n\log n)$、空间 $O(n)$，并可记录前驱恢复方案。
 
 **思路：**
@@ -216,6 +241,7 @@ ll multipleKnapsack(const vector<int>& weight,
 using namespace std;
 
 template <class T>
+// 参数：可严格比较序列。返回：一个最长严格递增子序列的 0-based 下标。效果：无副作用，O(n log n)。
 vector<int> longestIncreasingSubsequenceIndices(const vector<T>& a) {
     // a 与返回下标均为 0-based；本模板恢复严格上升子序列。
     int n = static_cast<int>(a.size());
@@ -264,6 +290,11 @@ vector<int> longestIncreasingSubsequenceIndices(const vector<T>& a) {
 
 ## 4.5 最长公共子序列（LCS）
 
+**适用范围：** 求两个序列的最长公共子序列；O(nm) 时间与空间。输入任意可相等比较的序列，输出一个最长公共子序列；并列答案不保证唯一。
+**能做什么：** 求两个序列的一个最长公共子序列。
+**输入 / 输出：** 输入支持相等比较的 a、b；返回一个最长公共子序列元素序列。
+**复杂度：** O(nm).
+
 **用途：** 求两个序列都能按原顺序取出的最长公共子序列。令 `dp[i][j]` 表示两序列前 $i,j$ 项的 LCS 长度；末项相等则从左上加一，否则取上方和左方最大值。时间 $O(nm)$、空间 $O(nm)$；只求长度可滚动为 $O(m)$ 空间。
 
 **思路：**
@@ -280,6 +311,7 @@ vector<int> longestIncreasingSubsequenceIndices(const vector<T>& a) {
 using namespace std;
 
 template <class T>
+// 参数：支持相等比较的两序列。返回：一个最长公共子序列。效果：无副作用，O(nm) 时间与空间。
 vector<T> longestCommonSubsequence(const vector<T>& a, const vector<T>& b) {
     // a、b 为 0-based；dp[i][j] 表示两序列前 i、j 个元素的 LCS 长度。
     int n = static_cast<int>(a.size());
@@ -328,6 +360,11 @@ vector<T> longestCommonSubsequence(const vector<T>& a, const vector<T>& b) {
 
 ## 4.6 区间 DP
 
+**适用范围：** 答案由相邻子区间合并得到时适用；常见 O(n^3)，空间 O(n^2)。输入序列，输出区间最优值；按区间长度递增，需定义单元素初值。
+**能做什么：** 最小化相邻石子反复合并的总代价。
+**输入 / 输出：** 输入石子权值；返回每次合并成本为区间和时的最小总费用，少于两项返回 0。
+**复杂度：** 通常 O(n^3).
+
 **用途：** 当答案由连续区间的子区间合并而来时，令 `dp[l][r]` 表示区间 `[l,r]` 的最优值，按区间长度递增，枚举分割点 `k` 合并左右答案。典型石子合并时间 $O(n^3)$、空间 $O(n^2)$；环形问题常复制一倍转成链。
 
 **思路：**
@@ -346,6 +383,7 @@ using namespace std;
 using ll = long long;
 const ll INF = numeric_limits<ll>::max() / 4;
 
+// 参数：相邻合并权值序列。返回：每次合并相邻段、代价为段和时的最小总费用。效果：O(n^3)，空/单元素费用为 0。
 ll minimumMergeCost(const vector<ll>& stones) {
     // stones 使用 0-based；dp[left][right] 表示闭区间合成一堆的最小代价。
     int n = static_cast<int>(stones.size());
@@ -384,6 +422,11 @@ ll minimumMergeCost(const vector<ll>& stones) {
 
 ## 4.7 树形 DP
 
+**适用范围：** 父子依赖可分解的树上最优值；O(n) 状态/边处理。输入以 1..n 编号的树，输出根状态或全点结果；递归深度可能达 n。
+**能做什么：** 求树上最大权独立集。
+**输入 / 输出：** 输入 1..n 无向树与节点权值；返回不选相邻点的最大权和，允许空集。
+**复杂度：** O(n).
+
 **用途：** 树形 DP 先选根，用 DFS 汇总子树信息；状态通常描述节点选或不选、子树内代价等。树上最大权独立集令 `dp[u][1]` 为选 $u$，则孩子不能选；`dp[u][0]` 为不选，可取孩子两状态较大者。时间 $O(n)$、空间 $O(n)$。
 
 **思路：**
@@ -401,6 +444,7 @@ using namespace std;
 
 using ll = long long;
 
+// 参数：1..n 编号无向树。返回：不选相邻点时的最大权值和。效果：O(n)，权值按本函数参数约定给出。
 ll maximumWeightIndependentSet(const vector<vector<int>>& tree,
                                const vector<ll>& weight,
                                int root = 1) {
@@ -408,6 +452,7 @@ ll maximumWeightIndependentSet(const vector<vector<int>>& tree,
     int n = static_cast<int>(tree.size()) - 1;
     vector<array<ll, 2>> dp(n + 1, {0, 0});
 
+    // 参数：当前点与父点。返回：无。效果：递归聚合子树状态到 dp[u]。
     function<void(int, int)> dfs = [&](int u, int parent) {
         // dp[u][0/1]：u 不选/选时，其整棵子树内可取得的最大权值。
         dp[u][0] = 0;
@@ -438,6 +483,11 @@ ll maximumWeightIndependentSet(const vector<vector<int>>& tree,
 
 ## 4.8 状态压缩 DP
 
+**适用范围：** n 较小且状态由元素子集决定；常见 O(2^n n^2) 时间、O(2^n n) 空间。输入 n 个点及代价矩阵，输出最优闭合路线代价；要求 n 能安全位移且内存可承受。
+**能做什么：** 求访问所有点并回到起点的最小旅行商回路。
+**输入 / 输出：** 输入 n×n cost 方阵及 0-based 起点；返回最小回路费用，无解为 INF。
+**复杂度：** O(2^n n^2).
+
 **用途：** 当元素数较小且状态仅表示“哪些元素已选”时，用二进制掩码压缩集合。旅行商路径令 `dp[mask][u]` 为从起点出发、访问集合 `mask` 且停在 $u$ 的最小代价，枚举新节点转移。时间 $O(n^2 2^n)$、空间 $O(n2^n)$，通常适合 $n\le20$。
 
 **思路：**
@@ -456,6 +506,7 @@ using namespace std;
 using ll = long long;
 const ll INF = numeric_limits<ll>::max() / 4;
 
+// 参数：方阵 cost 与起点下标。返回：从起点出发访问每点一次并回起点的最小费用；无可行环返回 INF。效果：O(2^n n^2)，n 须较小。
 ll travelingSalesmanCycle(const vector<vector<ll>>& cost, int start = 0) {
     // 节点为 0-based；cost[u][v] 可表示有向边，无边必须设为 INF。
     int n = static_cast<int>(cost.size());
@@ -503,6 +554,11 @@ ll travelingSalesmanCycle(const vector<vector<ll>>& cost, int start = 0) {
 
 ## 4.9 数位 DP
 
+**适用范围：** 按数字位逐位构造且约束可由有限状态描述；复杂度 O(L·S)，S 为状态数。输入十进制上界与目标和，输出 [0,N] 中符合条件数量；前导零语义由实现固定。
+**能做什么：** 统计数位和等于目标的非负整数个数。
+**输入 / 输出：** 输入非负上界与目标数位和；返回 [0,n] 内符合条件个数，前导零不计数。
+**复杂度：** O(L·S).
+
 **用途：** 数位 DP 统计巨大整数区间内满足数位约束的数。按高位到低位搜索，状态记录位置、已用信息及是否受上界限制；不受限状态可记忆化。模板统计数位和等于目标值的非负整数个数，时间 $O(D\cdot S\cdot10)$、空间 $O(D\cdot S)$。
 
 **思路：**
@@ -520,6 +576,7 @@ using namespace std;
 
 using ll = long long;
 
+// 参数：非负上界 n 与目标数位和。返回：[0,n] 中数位和等于目标的整数个数。效果：O(位数×targetSum)。
 ll countDigitSumUpTo(ll n, int targetSum) {
     // 统计闭区间 [0,n]；n<0 或目标和为负时统一返回 0。
     if (n < 0 || targetSum < 0) return 0;
@@ -528,6 +585,7 @@ ll countDigitSumUpTo(ll n, int targetSum) {
     vector<vector<ll>> memo(length, vector<ll>(targetSum + 1, -1));
 
     // position 从最高位向低位；tight 表示当前前缀是否仍贴住 n 的上界。
+    // 参数：当前数位位置、已用数位和及是否受上界限制。返回：满足目标数位和的补全数。效果：写入 memo，避免重复状态计算。
     function<ll(int, int, bool)> dfs = [&](int position, int sum, bool tight) -> ll {
         if (sum > targetSum) return 0;
         if (position == length) return sum == targetSum;
@@ -548,6 +606,7 @@ ll countDigitSumUpTo(ll n, int targetSum) {
     return dfs(0, 0, true);
 }
 
+// 参数：非负闭区间 [left,right] 与目标数位和。返回：区间内符合条件的整数个数。效果：调用两次 countDigitSumUpTo。
 ll countDigitSumInRange(ll left, ll right, int targetSum) {
     // 用前缀计数相减得到闭区间 [left,right]；left-1 由前缀函数处理负数。
     return countDigitSumUpTo(right, targetSum)
@@ -566,6 +625,11 @@ ll countDigitSumInRange(ll left, ll right, int targetSum) {
 - [OI Wiki：数位 DP](https://oi-wiki.org/dp/digit/)
 
 ## 4.10 DAG 上的 DP
+
+**适用范围：** 依赖图为 DAG 且转移沿边传播；O(V+E)。输入邻接表与源点，输出最长路值；不可达节点用 NEG_INF 标记。
+**能做什么：** 计算 DAG 中从源点出发的最长路。
+**输入 / 输出：** 输入 1..n DAG 邻接表及源点；返回各点最长路，不可达为 NEG_INF。
+**复杂度：** O(V+E).
 
 **用途：** 有向无环图天然给出状态依赖：按拓扑序处理节点，使所有前驱先于后继完成。模板求指定源点到各点的最长路，可有负边；拓扑排序与松弛总时间 $O(n+m)$、空间 $O(n+m)$。若图存在环则拓扑序不完整，不能直接使用 DAG DP。
 
@@ -590,6 +654,7 @@ struct Edge {
     ll weight;
 };
 
+// 参数：1..n 编号 DAG 邻接表与源点。返回：各点最长路权值；不可达为 NEG_INF。效果：O(V+E)，图必须无环。
 vector<ll> longestPathInDAG(const vector<vector<Edge>>& graph, int source) {
     // graph 与节点为 1-based、有向、可含重边和负权，但必须无环。
     int n = static_cast<int>(graph.size()) - 1;
@@ -642,6 +707,11 @@ vector<ll> longestPathInDAG(const vector<vector<Edge>>& graph, int source) {
 
 ## 4.11 编辑距离
 
+**适用范围：** 插入、删除、替换的单位代价字符串编辑距离；O(nm) 时间、O(m) 空间。输入两字符串，输出最少操作数。
+**能做什么：** 计算单位编辑代价下的字符串编辑距离。
+**输入 / 输出：** 输入字符串 a、b；返回插入/删除/替换代价均为 1 时的最少操作数。
+**复杂度：** O(nm).
+
 **用途与复杂度。** 求两个字符串通过插入、删除、替换变成相同字符串的最少操作数。状态转移枚举最后一步，时间 $O(nm)$；滚动一行后空间为 $O(m)$。
 
 **思路与用法。** `dp[j]` 表示已处理的 `a` 前缀与 `b[0..j)` 的编辑距离。每行开始时保存左上旧值；相等字符沿用左上，不等时在删除、插入、替换三者中取最小。
@@ -652,6 +722,7 @@ vector<ll> longestPathInDAG(const vector<vector<Edge>>& graph, int source) {
 #include <bits/stdc++.h>
 using namespace std;
 
+// 参数：两字符串。返回：插入、删除、替换代价均为 1 的最小编辑次数。效果：O(|a||b|) 时间、O(|b|) 空间。
 int editDistance(const string& a, const string& b) {
     // dp[j] 表示当前 a 前缀与 b 的前 j 个字符之间的编辑距离。
     vector<int> dp(b.size() + 1);
@@ -678,6 +749,11 @@ int editDistance(const string& a, const string& b) {
 
 ## 4.12 树形 DP 与换根
 
+**适用范围：** 树上需要求每个点作根的答案且可从父答案增量转移；O(n)。输入树，输出每个根的答案；边权和/节点编号需符合代码约定。
+**能做什么：** 计算树上每个点作为根时的距离和。
+**输入 / 输出：** 输入 n 和 1-based 无向树边；solve 返回 n+1 向量，1..n 槽为各根答案；同一对象仅调用一次，重复调用会重复累加。
+**复杂度：** O(n).
+
 **用途与复杂度。** 子树信息可合并成父节点状态；换根 DP 复用相邻根之间的答案，避免每个根重新遍历整棵树。示例要求 $n\ge1$，求无权树每个点到所有点的距离和，时间 $O(n)$、空间 $O(n)$。
 
 **思路与用法。** 先以 1 为根求子树大小和根 1 的距离总和；第二遍从父点 `u` 移到子点 `v` 时，`v` 子树内的 `sz[v]` 个点距离减 1，其余 `n-sz[v]` 个距离加 1，因此 `ans[v]=ans[u]+n-2*sz[v]`。
@@ -695,14 +771,17 @@ struct RerootDistanceSum {
     vector<int> subtreeSize;
     vector<ll> answer;
 
+    // 参数：树的顶点数 n>=1。返回：清零的换根 DP 对象。效果：分配 1..n 邻接表及状态数组。
     explicit RerootDistanceSum(int n)
         : n(n), graph(n + 1), subtreeSize(n + 1), answer(n + 1, 0) {}
 
+    // 参数：树中相邻顶点 u、v。返回：无。效果：向无向邻接表加入一条边。
     void addEdge(int u, int v) {
         graph[u].push_back(v);
         graph[v].push_back(u); // 无向树
     }
 
+    // 参数：当前点、父点和深度。返回：无。效果：计算子树大小与初始根答案。
     void firstDfs(int u, int parent, int depth) {
         subtreeSize[u] = 1;
         answer[1] += depth; // 第一遍累加以 1 为根的距离和
@@ -713,6 +792,7 @@ struct RerootDistanceSum {
         }
     }
 
+    // 参数：当前根及其父点。返回：无。效果：将父点答案转移到子点并遍历整棵树。
     void rerootDfs(int u, int parent) {
         for (int v : graph[u]) {
             if (v == parent) continue;
@@ -721,6 +801,7 @@ struct RerootDistanceSum {
         }
     }
 
+    // 参数：无；构造器须已给出 n 与全部树边。返回：answer[1..n] 的各根距离和。效果：O(n)，写入并返回内部答案。
     vector<ll> solve() {
         firstDfs(1, 0, 0);
         rerootDfs(1, 0);
@@ -733,7 +814,12 @@ struct RerootDistanceSum {
 
 ## 4.13 概率与期望 DP
 
-**用途与复杂度。** 随机过程的后续状态若形成无环依赖，可用期望线性性建立 DP；状态数为 $S$、每状态枚举 $T$ 个结果时，时间 $O(ST)$。若概率转移形成环，可能需要联立方程。
+**适用范围：** 等概率、独立抽取不同种类卡片直到集齐；本例不覆盖一般状态图。复杂度 O(n)。
+**能做什么：** 计算 n 种卡片等概率独立抽取直至集齐的期望次数。
+**输入 / 输出：** 输入种类数 n>0；返回期望抽取次数。
+**复杂度：** O(n) 时间与空间。
+
+**用途与复杂度。** 已收集 $i$ 种时，以 $(n-i)/n$ 概率抽到新种类，否则仍在状态 $i$。移项可得 `E[i]=(1 + pNew * E[i+1])/pNew`，总计 O(n) 时间与空间。
 
 **思路与用法。** 收集 `n` 种等概率卡片，已有 `i` 种时下一步以 `(n-i)/n` 概率获得新种类，否则回到同一状态。把留在原状态的项移到等式左边，得到 `E[i]=(1 + pNew * E[i+1])/pNew`。
 
@@ -743,6 +829,7 @@ struct RerootDistanceSum {
 #include <bits/stdc++.h>
 using namespace std;
 
+// 参数：不同卡片种类数 n>0。返回：等概率独立抽取直到集齐的期望次数。效果：O(n) 时间、空间。
 double couponCollectorExpectation(int n) {
     // e[i] 是已收集 i 种时还需抽取次数的期望，边界 e[n]=0。
     vector<double> e(n + 1, 0.0);

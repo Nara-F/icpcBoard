@@ -25,6 +25,21 @@ def snippets(path: Path) -> list[str]:
     return re.findall(r"```cpp\n(.*?)```", path.read_text(encoding="utf-8"), re.S)
 
 
+def section_snippet(path: Path, heading: str) -> str:
+    text = path.read_text(encoding="utf-8")
+    match = re.search(rf"^{re.escape(heading)}\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    if not match:
+        raise RuntimeError(f"section not found: {heading}")
+    blocks = snippets_from_text(match.group(1))
+    if len(blocks) != 1:
+        raise RuntimeError(f"expected one C++ block in {heading}, found {len(blocks)}")
+    return blocks[0]
+
+
+def snippets_from_text(text: str) -> list[str]:
+    return re.findall(r"```cpp\n(.*?)```", text, re.S)
+
+
 def compile_and_run(name: str, code: str, directory: Path, run: bool = False) -> None:
     source = directory / f"{name.replace(' ', '_')}.cpp"
     binary = source.with_suffix("")
@@ -101,6 +116,56 @@ int main() {
     auto tangent=lineCircleIntersections({-2,1},{1,0},c);
     assert(tangent.size()==1 && fabsl(tangent[0].x)<1e-9L);
     assert(circleIntersections(c,Circle{{1,0},1}).size()==2);
+}
+'''),
+        ("dsu_on_tree", section_snippet(CHAPTERS["05"], "## 5.14 DSU on Tree（树上启发式合并）") + r'''
+int main() {
+    mt19937 rng(712367);
+    auto check = [&](int n, int mode) {
+        vector<vector<int>> tree(n + 1);
+        for (int v = 2; v <= n; ++v) {
+            int p = mode == 1 ? v - 1 : (mode == 2 ? 1 : int(rng() % (v - 1)) + 1);
+            tree[p].push_back(v);
+            tree[v].push_back(p);
+        }
+        vector<int> color(n + 1);
+        for (int u = 1; u <= n; ++u) {
+            if (mode == 3) color[u] = 17;
+            else if (mode == 4) color[u] = u * 100003 - 900000;
+            else color[u] = int(rng() % 9) - 4;
+        }
+        int root = mode == 0 ? int(rng() % n) + 1 : 1;
+        DSUOnTree solver(tree, color, root);
+        vector<int> got = solver.solve();
+        assert(solver.solve() == got);
+
+        vector<int> parent(n + 1), order{root};
+        parent[root] = -1;
+        for (size_t i = 0; i < order.size(); ++i) {
+            int u = order[i];
+            for (int v : tree[u]) if (v != parent[u]) {
+                parent[v] = u;
+                order.push_back(v);
+            }
+        }
+        vector<set<int>> seen(n + 1);
+        vector<int> want(n + 1);
+        for (int i = n - 1; i >= 0; --i) {
+            int u = order[i];
+            seen[u].insert(color[u]);
+            for (int v : tree[u]) if (parent[v] == u)
+                seen[u].insert(seen[v].begin(), seen[v].end());
+            want[u] = (int)seen[u].size();
+        }
+        for (int u = 1; u <= n; ++u) assert(got[u] == want[u]);
+    };
+
+    check(1, 0);
+    check(80, 1);
+    check(80, 2);
+    check(80, 3);
+    check(80, 4);
+    for (int test = 0; test < 300; ++test) check(1 + int(rng() % 90), 0);
 }
 '''),
     ]

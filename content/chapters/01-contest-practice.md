@@ -19,6 +19,7 @@ using namespace std;
 
 using ll = long long;
 
+// 参数：无；从标准输入读取一组数据。返回：无。效果：计算并写出当前测试用例答案。
 void solve() {
     int n;
     cin >> n;
@@ -197,6 +198,7 @@ using namespace std;
 
 #ifdef DEBUG
 template <class... Args>
+// 参数：任意可流输出的调试值。返回：无。效果：按顺序写入标准错误。
 void debugLog(Args&&... args) {
     // 折叠表达式按参数顺序输出，调试格式集中在一个入口维护。
     ((cerr << forward<Args>(args) << ' '), ...);
@@ -207,6 +209,7 @@ void debugLog(Args&&... args) {
 #define DBG(...) ((void)0)
 #endif
 
+// 参数：prefix[0..n] 与 1-based 闭区间 [left,right]。返回：区间和。效果：断言边界并写调试日志。
 long long rangeSum(const vector<long long>& prefix, int left, int right) {
     // 调用约定：prefix[0..n]，查询原数组闭区间 [left, right]。
     assert(1 <= left && left <= right);
@@ -254,6 +257,7 @@ int main(int argc, char** argv) {
     mt19937_64 rng(seed);
     cerr << "seed = " << seed << '\n';
 
+    // 参数：闭整数区间 [left,right]。返回：均匀随机整数。效果：推进 mt19937_64 状态。
     auto randomInt = [&](long long left, long long right) {
         return uniform_int_distribution<long long>(left, right)(rng);
     };
@@ -306,6 +310,7 @@ using ll = long long;
 
 // 示例基准：枚举所有子集，求不超过 capacity 的最大价值。
 // 仅用于 n 很小的对拍；下标统一为 0..n-1。
+// 参数：0-based 平行重量/价值数组及容量。返回：子集枚举得到的最大价值。效果：只适用于 n<=24 的小数据，O(2^n n)。
 ll bruteKnapsack(const vector<int>& weight,
                  const vector<ll>& value,
                  int capacity) {
@@ -527,12 +532,14 @@ using ll = long long;
 using i128 = __int128_t;
 using u128 = __uint128_t;
 
+// 参数：待比较实数及相对/绝对容差 eps。返回：混合误差下是否近似相等。效果：无副作用。
 bool almostEqual(long double a, long double b,
                  long double eps = 1e-12L) {
     // 同时照顾接近 0 的绝对误差和大数的相对误差。
     return fabsl(a - b) <= eps * max({1.0L, fabsl(a), fabsl(b)});
 }
 
+// 参数：有符号 128 位整数。返回：十进制文本。效果：无副作用，支持最小负值。
 string toString(i128 value) {
     if (value == 0) return "0";
     bool negative = value < 0;
@@ -549,6 +556,7 @@ string toString(i128 value) {
     return result;
 }
 
+// 参数：两个 long long 因子。返回：精确的 128 位乘积。效果：先扩宽再相乘，避免 64 位乘法溢出。
 i128 safeProduct(ll a, ll b) {
     return static_cast<i128>(a) * b; // 转换必须发生在乘法之前
 }
@@ -605,3 +613,91 @@ i128 safeProduct(ll a, ll b) {
 
 - [OI Wiki：ICPC/CCPC 赛事与赛制](https://oi-wiki.org/contest/icpc/)
 - [OI Wiki：题型概述](https://oi-wiki.org/contest/problems/)
+
+## 1.14 Python 调试与随机对拍
+
+**适用范围：** 本地验证一个已编译的 C++ 程序；适用于输入规模可由独立暴力程序求解的小数据。
+**能做什么：** 固定种子生成用例、运行正解、检测超时/非零返回码、按空白切分比较输出，并保存可复现失败输入。
+**输入 / 输出：** 被测可执行文件读取 `n` 和一行 `n` 个整数，输出最大连续子数组和；脚本参数为已编译程序路径和可选迭代次数，失败时写入 `failed.in`。
+**复杂度：** 每轮暴力 O(n²) 加一次子进程启动和运行时间；错误答案缩小最多额外运行 O(n²) 次子进程（数组上限为 12）。
+
+独立暴力实现不能复用正解的核心逻辑。对拍答案不一致时，脚本逐项尝试删除并保留仍能复现答案差异的用例；超时或非零退出直接保存原始输入与错误，不继续缩小。失败输入可单独复跑。随机测试可发现错误，不能代替证明。
+
+```python
+import random
+import subprocess
+import sys
+from pathlib import Path
+
+# 参数：整数列表。返回：枚举所有非空子数组所得最大和。效果：无副作用，O(n^2)。
+def brute(a):
+    best = None
+    for left in range(len(a)):
+        total = 0
+        for right in range(left, len(a)):
+            total += a[right]
+            best = total if best is None else max(best, total)
+    return best
+
+# 参数：已编译程序路径和整数列表。返回：(完整输入文本, stdout tokens, 错误描述)。效果：启动子进程，超时 1 秒。
+def run(program, a):
+    data = f"{len(a)}\n{' '.join(map(str, a))}\n"
+    try:
+        proc = subprocess.run([program], input=data, text=True, capture_output=True, timeout=1)
+    except subprocess.TimeoutExpired:
+        return data, [], "timeout"
+    if proc.returncode != 0:
+        return data, proc.stdout.split(), f"return code {proc.returncode}: {proc.stderr}"
+    return data, proc.stdout.split(), ""
+
+# 参数：程序路径、固定随机种子和轮数。返回：通过/失败状态。效果：失败时写 failed.in 与 failed.txt。
+def stress(program, seed=20261009, rounds=300):
+    rng = random.Random(seed)
+    for case_id in range(rounds):
+        n = rng.randint(1, 12)
+        a = [rng.randint(-20, 20) for _ in range(n)]
+        data, got, error = run(program, a)
+        expected = str(brute(a))
+        if error or got != [expected]:
+            # 答案不一致时逐项删除并保留仍不一致的近似最小样例；超时/非零退出直接保存原始输入。
+            small = a[:]
+            changed = True
+            while not error and changed and len(small) > 1:
+                changed = False
+                for i in range(len(small)):
+                    trial = small[:i] + small[i + 1:]
+                    trial_data, trial_got, trial_error = run(program, trial)
+                    if trial_error or trial_got != [str(brute(trial))]:
+                        small, data, got, error = trial, trial_data, trial_got, trial_error
+                        changed = True
+                        break
+            Path("failed.in").write_text(data)
+            Path("failed.txt").write_text(
+                f"seed={seed} case={case_id} input={small} expected={brute(small)} "
+                f"actual={got} error={error}\n"
+            )
+            print("FAIL: see failed.in and failed.txt")
+            return False
+    print(f"PASS: {rounds} cases, seed={seed}")
+    return True
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        raise SystemExit("usage: python3 stress.py ./solution [rounds]")
+    ok = stress(sys.argv[1], rounds=int(sys.argv[2]) if len(sys.argv) > 2 else 300)
+    raise SystemExit(0 if ok else 1)
+```
+
+常用 Python 调试/枚举工具：
+
+| 工具 | 用法与边界 |
+|---|---|
+| `assert condition, message` | 检查内部不变量；优化模式可能移除断言，不要用它校验不可信输入 |
+| `print(repr(x), file=sys.stderr)` | 显示空格、换行等不可见字符；不会污染被测程序 stdout |
+| `breakpoint()` / `pdb` | 在本地交互检查变量、单步执行；提交前移除断点 |
+| `itertools.product/permutations/combinations` | 小规模枚举笛卡尔积、排列、组合；规模按指数/阶乘增长，先估算数量 |
+| 整数 token 比较 | 输出为整数时用 `stdout.split()` 再逐 token 比较，忽略空白差异 |
+| `math.isclose(a,b, rel_tol=..., abs_tol=...)` | 浮点答案用容差核对；容差按题目精度要求设定 |
+| 多解构造题 | 单独写 validator 检查格式、范围、互异性和约束，不比较与参考答案完全相同 |
+
+本节脚本只示范整数最大子段和，且子段必须非空，因此全负数组的答案是最大元素。实际题目应替换生成器、独立暴力和输出验证器。

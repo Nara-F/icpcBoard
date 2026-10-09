@@ -5,7 +5,9 @@
 
 ## 7.1 GCD 与扩展 GCD
 
-**问题与思路：** `gcd(a,b)` 求最大公约数；扩展 GCD 同时求 $ax+by=gcd(a,b)$ 的一组整数解，可用于逆元和同余方程。欧几里得算法反复令 `(a,b)=(b,a%b)`，时间 $O(\log \min(|a|,|b|))$，递归空间 $O(\log n)$。
+**适用范围：** 整数最大公约数、Bézout 系数与同余预处理；输入及递归系数乘积须可由 `long long` 表示，不能含 `LLONG_MIN`。
+**能做什么：** 欧几里得算法与扩展欧几里得算法在 $O(\log \min(|a|,|b|))$ 时间内求 gcd 和一组系数；`norm` 规范余数。
+**输入 / 输出：** `exgcd(a,b,x,y)` 返回非负 gcd 并写 `x,y` 使 `ax+by=gcd`；(0,0) 返回 0、系数为 (1,0)。`norm(x,mod)` 要求 `mod>0`，返回 `[0,mod)`。
 
 **用法：**
 
@@ -20,6 +22,7 @@ using namespace std;
 using ll = long long;
 
 // 输入可为负数；返回非负 gcd，并令 a*x+b*y=gcd(a,b)。系数本身不取模。
+// 参数 a,b 及递归系数中间值须可由 long long 表示，不能含 LLONG_MIN；返回 gcd>=0，并覆盖 x,y 为 Bézout 系数。
 ll exgcd(ll a, ll b, ll& x, ll& y) {
     if (b == 0) {
         // 选 x 的符号是为了即使 a<0，右侧仍为非负的 |a|。
@@ -36,6 +39,7 @@ ll exgcd(ll a, ll b, ll& x, ll& y) {
 }
 
 // 要求 mod>0；C++ 的负数余数可能为负，所以统一规范到 [0,mod)。
+// 参数 mod>0；返回 x 的规范模余数 [0,mod)，不修改实参。
 ll norm(ll x, ll mod) {
     x %= mod;
     if (x < 0) x += mod;
@@ -55,7 +59,9 @@ ll norm(ll x, ll mod) {
 
 ## 7.2 快速幂
 
-**问题与思路：** 计算 $a^e\bmod mod$ 或可结合运算的重复乘积，适用于非负整数指数。按指数二进制位不断平方，遇到 1 位就乘入答案。时间 $O(\log e)$，空间 $O(1)$；乘积可能溢出时须用 `__int128`。
+**适用范围：** 非负整数指数的模幂；负指数须先求逆元，模数必须为正。
+**能做什么：** `qpow` 用二进制平方计算 $a^e\bmod mod$，$O(\log e)$ 时间、$O(1)$ 额外空间；`mul_mod` 以 `__int128` 承接乘积。
+**输入 / 输出：** `mul_mod(a,b,mod)` 要求 `mod>0`，返回 C++ 有符号余数；`qpow(a,e,mod)` 要求 `e>=0,mod>0`，返回 `[0,mod)`，包括 `mod==1` 时为 0，`0^0` 按空乘积约定为 `1%mod`。
 
 **用法：**
 
@@ -70,11 +76,13 @@ using namespace std;
 using ll = long long;
 
 // 要求 mod>0，且 a、b 已在 long long 内；用 __int128 避免乘法先溢出再取模。
+// 参数 mod>0；返回 a*b 的 C++ 余数，乘积在 __int128 中求值，不改实参。
 ll mul_mod(ll a, ll b, ll mod) {
     // 提升后再乘，避免两个 long long 先溢出；要求 mod>0。
     return (ll)((__int128)a * b % mod);
 }
 
+// 参数 e>=0、mod>0；返回规范化的 a^e mod mod，内部不持有可变共享状态。
 ll qpow(ll a, long long e, ll mod) {
     // e 必须非负；若题目出现负指数，应先求 a 的模逆元再调用。
     a %= mod;
@@ -102,11 +110,13 @@ ll qpow(ll a, long long e, ll mod) {
 
 ## 7.3 素数筛
 
-**问题与思路：** 一次求出 $[1,n]$ 内全部素数。埃氏筛从每个素数的平方起标记倍数，时间 $O(n\log\log n)$；线性筛让每个合数只被最小质因子筛一次，时间 $O(n)$。二者空间均为 $O(n)$，适合上界已知的批量判素与分解。
+**适用范围：** 需要为一个已知上界内的整数批量判素或分解时使用；上界 `n>=0`。
+**能做什么：** 线性筛在 $O(n)$ 时间和空间内生成质数与最小质因子表。
+**输入 / 输出：** `PrimeSieve(n)` 建立 `[0,n]` 表；`isPrime(x)` 对任意整数返回布尔值，超出范围或 `x<2` 返回 `false`。构造对象拥有并修改自己的 `primes/minPrime`。
 
 **用法：**
 
-- 只需素数表时调用 `linearSieve(n)`。
+- 构造 `PrimeSieve sieve(n)` 后通过 `sieve.primes` 读取素数表。
 - 返回的 `primes` 递增，`minPrime[x]` 是 `x` 的最小质因子。
 - `isPrime(x)` 可判断筛选范围内的整数。
 - 多次分解不超过 `n` 的数，可反复除以 `minPrime[x]`。
@@ -119,6 +129,7 @@ struct PrimeSieve {
     // 数组下标就是被筛整数，合法查询范围为 [0,n]；0、1 的 minPrime 保持为 0。
     vector<int> primes, minPrime;
 
+    // 参数 n>=0；构造 [0,n] 筛表并填充本对象的 primes、minPrime。
     explicit PrimeSieve(int n) : minPrime(n + 1, 0) {
         for (int i = 2; i <= n; ++i) {
             if (minPrime[i] == 0) {
@@ -133,6 +144,7 @@ struct PrimeSieve {
         }
     }
 
+    // 参数 x 为任意整数；返回 x 是否在筛范围内且为素数，越界返回 false，不改对象。
     bool isPrime(int x) const {
         return x >= 2 && x < (int)minPrime.size() && minPrime[x] == x;
     }
@@ -151,7 +163,9 @@ struct PrimeSieve {
 
 ## 7.4 质因数分解
 
-**问题与思路：** 把正整数 $n$ 写成不同素数幂的乘积。试除法从 2 枚举到 $p^2>n$，每找到因子就连续除尽，最后大于 1 的余数也是质因子。单次时间 $O(\sqrt n)$、额外空间 $O(1)$；适合中等大小整数，不含 Pollard–Rho。
+**适用范围：** 分解单个正整数 `n>=1`，数值不大到需要 Pollard–Rho 时使用。
+**能做什么：** 试除到平方根，时间 $O(\sqrt n)$、额外空间随不同质因子数增长。
+**输入 / 输出：** `factorize(n)` 返回按质因子升序排列的 `{p,e}` 向量；`n==1` 返回空向量，不改变输入。
 
 **用法：**
 
@@ -165,6 +179,7 @@ struct PrimeSieve {
 using namespace std;
 using ll = long long;
 
+// 参数 n>=1；返回升序 {质因子,指数}，n==1 返回空表，不改调用者数据。
 vector<pair<ll, int>> factorize(ll n) {
     // 要求 n>=1；返回质因子递增的 {质因子, 指数}，不记录因子 1。
     vector<pair<ll, int>> fac;
@@ -196,7 +211,9 @@ vector<pair<ll, int>> factorize(ll n) {
 
 ## 7.5 欧拉函数
 
-**问题与思路：** $\varphi(n)$ 表示 $1\ldots n$ 中与 $n$ 互质的整数个数，常用于欧拉定理、循环节和计数。分解 $n$ 后用 $\varphi(n)=n\prod_{p\mid n}(1-1/p)$。单次试除为 $O(\sqrt n)$、空间 $O(1)$；批量求值可用线性筛 $O(n)$。
+**适用范围：** 求正整数 `n>=1` 的欧拉函数，或求固定上界内的整张函数表。
+**能做什么：** `eulerPhi` 单次试除 $O(\sqrt n)$；`phiSieve` 线性筛 $O(n)$ 时间、$O(n)$ 空间。
+**输入 / 输出：** `eulerPhi(n)` 返回 `phi(n)` 且 `phi(1)=1`；`phiSieve(n)` 要求 `n>=0`，返回下标 `[0,n]` 的表，`n==0` 时只含 `phi[0]=0`。
 
 **用法：**
 
@@ -210,6 +227,7 @@ vector<pair<ll, int>> factorize(ll n) {
 using namespace std;
 using ll = long long;
 
+// 参数 n>=1；返回 phi(n)，不修改 n 或外部状态。
 ll eulerPhi(ll n) {
     // 要求 n>=1；ans 始终等于原 n 乘上已处理质因子的 (p-1)/p。
     ll ans = n;
@@ -223,6 +241,7 @@ ll eulerPhi(ll n) {
     return ans;
 }
 
+// 参数 n>=0；返回下标 [0,n] 的 phi 表，分配局部筛状态，不修改外部对象。
 vector<int> phiSieve(int n) {
     // phi[x] 对应整数 x；线性筛中每个合数只由最小质因子产生一次。
     vector<int> phi(n + 1), primes;
@@ -261,7 +280,9 @@ vector<int> phiSieve(int n) {
 
 ## 7.6 模逆元
 
-**问题与思路：** 逆元 $a^{-1}$ 满足 $aa^{-1}\equiv1\pmod m$，用于模意义除法；存在当且仅当 $gcd(a,m)=1$。扩展 GCD 可处理任意正模数，时间 $O(\log m)$；若 $m$ 为质数且 $a\not\equiv0$，也可算 $a^{m-2}$。
+**适用范围：** 模意义除法且 `mod>1`；逆元存在的充要条件是 `gcd(a,mod)==1`。
+**能做什么：** 扩展 GCD 在 $O(\log mod)$ 时间求逆元，支持合数模。
+**输入 / 输出：** `modInverse(a,mod)` 返回 `{true,x}` 且 `x∈[0,mod)`；若不互质返回 `{false,0}`。函数先把负 `a` 规范化。
 
 **用法：**
 
@@ -275,6 +296,7 @@ vector<int> phiSieve(int n) {
 using namespace std;
 using ll = long long;
 
+// 参数 a,b 为非负且递归系数运算须可表示；返回 gcd 并写 Bézout 系数 x,y。
 ll exgcd(ll a, ll b, ll& x, ll& y) {
     if (b == 0) {
         x = 1;
@@ -288,6 +310,7 @@ ll exgcd(ll a, ll b, ll& x, ll& y) {
     return g;
 }
 
+// 参数 mod>1、a 可带符号；返回 {是否存在,规范逆元}，不互质时为 {false,0}。
 pair<bool, ll> modInverse(ll a, ll mod) {
     // 要求 mod>1；返回 false 表示 gcd(a,mod)!=1，此时任何模除法都无定义。
     a %= mod;
@@ -314,7 +337,9 @@ pair<bool, ll> modInverse(ll a, ll mod) {
 
 ## 7.7 线性同余方程
 
-**问题与思路：** 求 $ax\equiv b\pmod m$。令 $g=gcd(a,m)$，有解当且仅当 $g\mid b$；约去 $g$ 后用扩展 GCD 求逆，得到模 $m/g$ 的唯一剩余类，原模下共有 $g$ 个解。时间 $O(\log m)$，空间 $O(\log m)$。
+**适用范围：** 求 `a*x ≡ b (mod m)`，要求正模数 `m>0`；系数和常数允许带符号。
+**能做什么：** 扩展 GCD 判定可解性并给出一个剩余类，时间 $O(\log m)$、递归空间 $O(\log m)$。
+**输入 / 输出：** `solveCongruence(a,b,m)` 返回 `{exists,x0,step}`；若有解，所有整数解为 `x=x0+k*step`，其中 `x0∈[0,step)`、`step=m/gcd(a,m)`。无解时其余字段为 0。
 
 **用法：**
 
@@ -328,6 +353,7 @@ pair<bool, ll> modInverse(ll a, ll mod) {
 using namespace std;
 using ll = long long;
 
+// 参数 a,b 为非负；返回 gcd 并覆盖 x,y 为 Bézout 系数。
 ll exgcd(ll a, ll b, ll& x, ll& y) {
     if (b == 0) { x = 1; y = 0; return a; }
     ll x1, y1;
@@ -343,6 +369,7 @@ struct CongruenceSolution {
     ll x0, step;
 };
 
+// 参数 m>0、a,b 可带符号；返回解存在标志及 x0、step，不解时三字段为 false,0,0。
 CongruenceSolution solveCongruence(ll a, ll b, ll m) {
     // 要求 m>0；负系数和负常数先规范化，方程语义不变。
     a %= m;
@@ -373,7 +400,9 @@ CongruenceSolution solveCongruence(ll a, ll b, ll m) {
 
 ## 7.8 中国剩余定理（非互质模数）
 
-**问题与思路：** 合并多个约束 $x\equiv r_i\pmod {m_i}$。逐次合并两式：解关于倍数的线性同余；当余数差不能被两模数的 gcd 整除时无解，否则新模数为 lcm。处理 $k$ 个式子约 $O(k\log M)$，空间 $O(1)$；模板兼容模数不互质。
+**适用范围：** 合并多个模同余式，模数允许不互质但每个 `mod[i]>0`；要求逐步 lcm 可放进 `long long`。
+**能做什么：** 逐式合并并用 gcd 判相容，时间约 $O(k\log M)$、额外空间 $O(1)$。
+**输入 / 输出：** `crt(rem,mod)` 要求两向量等长；返回 `{true,r,m}` 表示全部解 `x=r+k*m` 且 `r∈[0,m)`，矛盾返回 `{false,0,0}`。空输入返回 `0 (mod 1)`。
 
 **用法：**
 
@@ -387,6 +416,7 @@ CongruenceSolution solveCongruence(ll a, ll b, ll m) {
 using namespace std;
 using ll = long long;
 
+// 参数 a,b 为正；返回 gcd 并覆盖 x,y 为 Bézout 系数，要求递归乘积不溢出。
 ll exgcd(ll a, ll b, ll& x, ll& y) {
     if (b == 0) { x = 1; y = 0; return a; }
     ll x1, y1;
@@ -402,6 +432,7 @@ struct CRTResult {
     ll remainder, modulus;
 };
 
+// 参数 rem/mod 等长、每个模数正且逐步 lcm<=LLONG_MAX；返回规范解类或矛盾标志，不改输入。
 CRTResult crt(const vector<ll>& rem, const vector<ll>& mod) {
     // 要求 rem.size()==mod.size() 且每个 mod[i]>0；空方程组返回 x≡0 (mod 1)。
     ll r = 0, m = 1;
@@ -441,7 +472,9 @@ CRTResult crt(const vector<ll>& rem, const vector<ll>& mod) {
 
 ## 7.9 组合数
 
-**问题与思路：** $\binom nk$ 表示从 $n$ 个对象选 $k$ 个。质数模数下，预处理阶乘和逆阶乘后可 $O(1)$ 查询；预处理时间与空间均为 $O(N)$。要求 $0\le n\le N<mod$，否则阶乘可能为 0，需改用 Pascal、Lucas 等方法。
+**适用范围：** 质数模数下重复查询组合数，预处理界 `N` 满足 `0<=N<mod`、`mod` 为质数且大于 1。
+**能做什么：** `Combinations` 预处理阶乘和逆阶乘，构造 $O(N+\log mod)$、单次查询 $O(1)$，空间 $O(N)$。
+**输入 / 输出：** `Combinations(N,mod)` 拥有 `[0,N]` 表；`C(n,k)` 返回模 `mod` 的组合数，`n>N`、`k<0` 或 `k>n` 按约定返回 0。
 
 **用法：**
 
@@ -455,6 +488,7 @@ CRTResult crt(const vector<ll>& rem, const vector<ll>& mod) {
 using namespace std;
 using ll = long long;
 
+// 参数 0<=a<mod、e>=0、mod>1；返回规范的 a^e 模余数，供阶乘逆元计算。
 ll qpow(ll a, ll e, ll mod) {
     ll ans = 1;
     while (e > 0) {
@@ -470,6 +504,7 @@ struct Combinations {
     // fact[i]=i!，invFact[i]=(i!)^{-1}；数组下标覆盖 [0,n]。
     vector<ll> fact, invFact;
 
+    // 参数 0<=n<mod、mod 为质数；构造并拥有 0..n 阶乘和逆阶乘表。
     Combinations(int n, ll mod) : mod(mod), fact(n + 1), invFact(n + 1) {
         // 前提：mod 为质数且 0<=n<mod，否则 fact[n] 可能为 0 且没有逆元。
         fact[0] = 1;
@@ -481,6 +516,7 @@ struct Combinations {
             invFact[i - 1] = (ll)((__int128)invFact[i] * i % mod);
     }
 
+    // 参数 n,k 为整数；返回 C(n,k) mod mod，越出预处理范围或 k 不合法时返回 0，不改表。
     ll C(int n, int k) const {
         // 返回 C(n,k) mod mod；非法 k 或超出预处理上界时约定返回 0。
         if (k < 0 || k > n || n >= (int)fact.size()) return 0;
@@ -502,7 +538,9 @@ struct Combinations {
 
 ## 7.10 容斥原理
 
-**问题与思路：** 求多个集合并集或“至少一个条件成立”的数量：奇数个集合交集加、偶数个集合交集减。枚举 $k$ 个条件的非空子集需 $O(2^k\cdot T)$，$T$ 为一次交集计数代价，空间 $O(1)$；适合条件数较小，常配合 lcm 统计倍数。
+**适用范围：** 统计 `[1,n]` 中被给定正除数至少一个整除的数；`n>=0`，条件数必须小于 64 且足够小以承受指数枚举。
+**能做什么：** 容斥枚举除数子集并用 lcm 算交集，时间 $O(2^k k)$、额外空间 $O(k)$；超过 `n` 的 lcm 贡献为 0。
+**输入 / 输出：** `countDivisible(n,a)` 忽略 0、去重并删除冗余倍数，返回并集计数；负除数不在输入约定内。
 
 **用法：**
 
@@ -516,6 +554,7 @@ struct Combinations {
 using namespace std;
 using ll = long long;
 
+// 参数 n>=0、a 含非负除数且有效项数<64；返回 [1,n] 并集计数，传值副本可排序删项。
 ll countDivisible(ll n, vector<ll> a) {
     // 统计闭区间 [1,n]；模板假设 n>=0、除数为非负数，且有效条件数 k<64。
     sort(a.begin(), a.end());
@@ -564,7 +603,9 @@ ll countDivisible(ll n, vector<ll> a) {
 
 ## 7.11 矩阵快速幂
 
-**问题与思路：** 对固定线性递推或状态转移，构造转移矩阵 $A$，用快速幂求 $A^e$。边长为 $d$ 的普通矩阵乘法为 $O(d^3)$，总时间 $O(d^3\log e)$，空间 $O(d^2)$；适合维数较小、指数很大的递推。
+**适用范围：** 维数较小、指数较大的线性递推或状态转移；指数非负，模数正。
+**能做什么：** `matPow` 用二进制快速幂，$O(d^3\log e)$ 时间、$O(d^2)$ 空间。
+**输入 / 输出：** `Matrix(r,c,mod)` 建立零矩阵；乘法要求维度匹配、模数一致，`matPow(base,e)` 要求方阵并返回 `base^e`，`e==0` 返回单位矩阵。
 
 **用法：**
 
@@ -584,8 +625,10 @@ struct Matrix {
     ll mod;
     vector<vector<ll>> a;
 
+    // 参数 r,c>=0、mod>0；构造并拥有 r*c 个零元素。
     Matrix(int r, int c, ll mod) : rows(r), cols(c), mod(mod), a(r, vector<ll>(c)) {}
 
+    // 参数 n>=0、mod>0；返回 n 阶模乘单位阵，不修改外部状态。
     static Matrix identity(int n, ll mod) {
         Matrix id(n, n, mod);
         for (int i = 0; i < n; ++i) id.a[i][i] = 1 % mod;
@@ -593,6 +636,7 @@ struct Matrix {
     }
 };
 
+// 参数矩阵满足 x.cols==y.rows 且模数相同为正；返回新乘积矩阵，不改 x,y。
 Matrix operator*(const Matrix& x, const Matrix& y) {
     // 前提 x.cols==y.rows；i-k-j 顺序可跳过零项，乘积用 __int128 防溢出。
     Matrix z(x.rows, y.cols, x.mod);
@@ -604,6 +648,7 @@ Matrix operator*(const Matrix& x, const Matrix& y) {
     return z;
 }
 
+// 参数 base 为正模方阵、e>=0；按值接收底矩阵并返回 base^e，实参不变。
 Matrix matPow(Matrix base, long long e) {
     // 要求 base 为方阵、e>=0；列向量转移通常写 state(t)=base^t*state(0)。
     Matrix ans = Matrix::identity(base.rows, base.mod);
@@ -629,7 +674,9 @@ Matrix matPow(Matrix base, long long e) {
 
 ## 7.12 高斯消元
 
-**问题与思路：** 求解含 $n$ 个未知数的实数线性方程组。逐列选择绝对值最大的主元，交换到当前行并消去其他行，最后判断无解、唯一解或无穷多解。对 $m\times n$ 方程组时间 $O(mn\min(m,n))$，空间 $O(mn)$；浮点比较使用 EPS。
+**适用范围：** 求有限实数系数的线性方程组，至少一行且每行列数相同；尺度适合绝对 EPS 判定。
+**能做什么：** 部分主元高斯消元判别无解/唯一/多解，$m×n$ 时间 $O(mn\min(m,n))$、空间 $O(mn)$。
+**输入 / 输出：** `gauss(a,answer)` 输入 `m×(n+1)` 增广矩阵并覆盖 `answer`；返回 0 无解（此时答案不可用）、1 唯一解、2 无穷多解（给自由变量取 0 的一组解）。
 
 **用法：**
 
@@ -643,6 +690,7 @@ Matrix matPow(Matrix base, long long e) {
 using namespace std;
 
 // 0：无解；1：唯一解；2：无穷多解。
+// 参数 a 为有限数值且形状 m>0、每行 n+1；覆盖 answer，返回 0无解/1唯一/2多解。无解时 answer 不可用。
 int gauss(vector<vector<long double>> a, vector<long double>& answer) {
     // a 是 m 行、n+1 列的增广矩阵；模板要求 m>0 且各行长度一致。
     // EPS 应按输入尺度调整：数值很大或病态矩阵可能需要更稳健的方法。
@@ -703,7 +751,9 @@ int gauss(vector<vector<long double>> a, vector<long double>& answer) {
 
 ## 7.13 公平组合游戏与 SG 函数
 
-**问题与思路：** 用于两人轮流行动、信息完全、无随机、不能行动者输的游戏。状态 SG 值是所有后继 SG 值的 `mex`；多个独立子游戏的总 SG 为各值异或，非零则先手必胜。DAG 上记忆化计算时间 $O(V+E)$ 加 `mex` 开销，空间 $O(V+E)$。
+**适用范围：** 无随机、完全信息、正常玩法且状态转移图为 DAG 的公平组合游戏；多个子游戏须彼此独立。
+**能做什么：** `sg(u)` 记忆化求 mex，遍历复杂度 $O(V+E)$ 外加 mex 标记；空间 $O(V+E)$。
+**输入 / 输出：** `SGGame(graph)` 接管 0-based 状态图；`sg(u)` 返回状态值并写入共享 `memo`；`firstPlayerWins(game,starts)` 会填充 memo，返回起始局面 SG 异或是否非零。节点下标须合法。
 
 **用法：**
 
@@ -722,9 +772,11 @@ struct SGGame {
     // memo[u]=-1 表示尚未计算，否则保存 SG(u)，使每个状态只展开一次。
     vector<int> memo;
 
+    // 参数 graph 是 0-based DAG 邻接表；移动其内容初始化游戏和 -1 memo。
     explicit SGGame(vector<vector<int>> graph)
         : nextState(std::move(graph)), memo(nextState.size(), -1) {}
 
+    // 参数 u 是合法状态编号；返回 SG(u)，并递归填充本对象 memo，要求图无环。
     int sg(int u) {
         if (memo[u] != -1) return memo[u];
         vector<int> values;
@@ -741,6 +793,7 @@ struct SGGame {
     }
 };
 
+// 参数 starts 是合法且互相独立的起始状态；返回 SG 异或非零，并通过 game 填充共享 memo。
 bool firstPlayerWins(SGGame& game, const vector<int>& starts) {
     // starts 表示彼此独立的子游戏；普通玩法下异或和非 0 当且仅当先手必胜。
     int total = 0;
@@ -762,9 +815,16 @@ bool firstPlayerWins(SGGame& game, const vector<int>& starts) {
 
 ## 7.14 质因数分解、约数个数与约数和
 
-若 $n=\prod p_i^{e_i}$，约数个数为 $\prod(e_i+1)$，约数和为 $\prod(1+p_i+\cdots+p_i^{e_i})$。单个数试除 $O(\sqrt n)$。
+**适用范围：** 分解 `n>=1` 后计算约数数量、约数和或完整约数列表；各结果须能放进 `long long`。
+**能做什么：** 试除分解 $O(\sqrt n)$；枚举约数 $O(\sqrt n+d\log d)$（`d` 为约数个数），额外空间 $O(d)$。
+**输入 / 输出：** `factorize(n)` 返回有序 `{p,e}`；`divisorCountSum(n)` 返回 `{约数个数,约数和}`；`enumerateDivisors(n)` 返回升序正约数，`n==1` 三者均给出自然单位结果。
 
 ```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+
+// 参数 n>=1；返回按质因子升序的 {p,e}，1 返回空向量，不改外部状态。
 vector<pair<ll,int>> factorize(ll n) {
     // 试除到 p*p>n；剩余 n>1 必为大质因子。
     vector<pair<ll, int>> f;
@@ -781,6 +841,7 @@ vector<pair<ll,int>> factorize(ll n) {
     if(n>1)f.push_back({n,1});
     return f;
 }
+// 参数 n>=1 且约数个数、约数和及中间幂可放进 ll；返回 {个数,总和}。
 pair<ll,ll> divisorCountSum(ll n) {
     // 假设结果可放入 ll
     ll count = 1, sum = 1;
@@ -795,6 +856,7 @@ pair<ll,ll> divisorCountSum(ll n) {
     }
     return {count,sum};
 }
+// 参数 n>=1；返回全部正约数升序列表，1 返回 {1}，不修改输入。
 vector<ll> enumerateDivisors(ll n) {
     vector<ll>d;
     for (ll i = 1; i <= n / i; ++i) {

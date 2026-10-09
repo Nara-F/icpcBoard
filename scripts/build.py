@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the icpcBoard Markdown, self-contained HTML, and print-ready PDF."""
 from __future__ import annotations
-import argparse, html, json, re, shutil, subprocess, sys, tempfile
+import argparse, html, json, re, shutil, subprocess, sys, tempfile, unicodedata
 from xml.etree import ElementTree
 from pathlib import Path
 from html.parser import HTMLParser
@@ -51,6 +51,11 @@ def validate_sources(paths, chapters):
         if in_fence: raise SystemExit(f"{path}: unclosed fenced code block")
     for path in paths:
         text=path.read_text(encoding="utf-8")
+        for offset,char in enumerate(text):
+            if unicodedata.category(char) in {"Cc", "Cf"} and char not in "\t\n":
+                line=text.count("\n",0,offset)+1
+                column=offset-text.rfind("\n",0,offset)
+                raise SystemExit(f"{path}:{line}:{column}: contains invisible control character U+{ord(char):04X}")
         if "\ufffd" in text: raise SystemExit(f"{path}: contains replacement character")
         for explicit_id in re.findall(r"\{#([A-Za-z][\w:.-]*)\}",text):
             if explicit_id in explicit_ids: raise SystemExit(f"{path}: duplicate explicit heading id {explicit_id!r}")
