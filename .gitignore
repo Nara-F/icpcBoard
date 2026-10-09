@@ -1,0 +1,6 @@
+# Generated deliverables and transient rendering files
+/output/
+/tmp/
+/.venv/
+__pycache__/
+*.py[cod]
