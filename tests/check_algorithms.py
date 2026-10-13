@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CHAPTERS = {
     "05": ROOT / "content/chapters/05-data-structures.md",
     "06": ROOT / "content/chapters/06-graph-theory.md",
+    "07": ROOT / "content/chapters/07-mathematics.md",
     "08": ROOT / "content/chapters/08-strings.md",
     "09": ROOT / "content/chapters/09-computational-geometry.md",
 }
@@ -166,6 +167,91 @@ int main() {
     check(80, 3);
     check(80, 4);
     for (int test = 0; test < 300; ++test) check(1 + int(rng() % 90), 0);
+}
+'''),
+        ("point_segment_tree_custom_merge", section_snippet(CHAPTERS["05"], "## 5.15 单点修改线段树与自定义合并 {#point-segment-tree-custom-merge}") + r'''
+int main() {
+    vector<Affine> two(3);
+    two[1] = makeAffine(2, 1);
+    two[2] = makeAffine(3, 4);
+    PointSegmentTree<Affine, ComposeAffine> ordered(two, makeAffine(1, 0), ComposeAffine{});
+    Affine pair = ordered.rangeQuery(1, 2);
+    assert((pair.a * 5 + pair.b) % MOD == 37); // f2(f1(5)); reversed order would be 39
+    assert(affineExample() == 821);
+
+    mt19937 rng(91237);
+    for (int trial = 0; trial < 100; ++trial) {
+        int n = 1 + int(rng() % 30);
+        vector<Affine> functions(n + 1);
+        for (int i = 1; i <= n; ++i)
+            functions[i] = makeAffine(rng() % MOD, rng() % MOD);
+        PointSegmentTree<Affine, ComposeAffine> st(functions, makeAffine(1, 0), ComposeAffine{});
+        for (int step = 0; step < 80; ++step) {
+            if (rng() % 3 == 0) {
+                int pos = 1 + int(rng() % n);
+                Affine f = makeAffine((ll)(rng() % MOD), (ll)(rng() % MOD));
+                functions[pos] = f;
+                st.pointSet(pos, f);
+            }
+            int l = 1 + int(rng() % n), r = 1 + int(rng() % n);
+            if (l > r) swap(l, r);
+            Affine want = makeAffine(1, 0);
+            for (int i = l; i <= r; ++i) want = ComposeAffine{}(want, functions[i]);
+            Affine got = st.rangeQuery(l, r);
+            assert(got.a == want.a && got.b == want.b);
+            ll x = rng() % MOD;
+            assert((got.a * x + got.b) % MOD == (want.a * x + want.b) % MOD);
+        }
+    }
+
+    vector<ll> sums{0, 4, -2, 7, 1};
+    PointSegmentTree<ll, plus<ll>> sumTree(sums, 0, plus<ll>{});
+    assert(sumTree.rangeQuery(2, 4) == 6);
+    sumTree.pointSet(3, 10);
+    assert(sumTree.rangeQuery(1, 4) == 13);
+
+    vector<ll> mins{0, 8, -3, 5, 2};
+    auto minMerge = [](ll a, ll b) { return min(a, b); };
+    PointSegmentTree<ll, decltype(minMerge)> minTree(mins, LLONG_MAX, minMerge);
+    assert(minTree.rangeQuery(1, 4) == -3);
+    minTree.pointSet(2, 9);
+    assert(minTree.rangeQuery(2, 4) == 2);
+}
+'''),
+        ("sieve_divisor_counts", section_snippet(CHAPTERS["07"], "## 7.3 素数筛") + r'''
+int main() {
+    PrimeSieve empty(0);
+    assert(empty.primes.empty() && empty.minPrime.size() == 1);
+    PrimeSieve one(1);
+    assert(one.primes.empty() && one.divisorCount[0] == 0 && one.countDivisors(1) == 1);
+
+    const int n = 3000;
+    PrimeSieve sieve(n);
+    vector<int> expectedPrimes;
+    for (int x = 2; x <= n; ++x) {
+        int divisorCount = 0;
+        for (int d = 1; d <= x; ++d) if (x % d == 0) ++divisorCount;
+        int smallest = 0, exponent = 0;
+        for (int p = 2; p <= x; ++p) if (x % p == 0) {
+            smallest = p;
+            int value = x;
+            while (value % p == 0) { ++exponent; value /= p; }
+            break;
+        }
+        assert(sieve.countDivisors(x) == divisorCount);
+        assert(sieve.minPrime[x] == smallest);
+        assert(sieve.minPrimeExponent[x] == exponent);
+        assert(sieve.isPrime(x) == (divisorCount == 2));
+        if (divisorCount == 2) expectedPrimes.push_back(x);
+    }
+    assert(sieve.divisorCount[0] == 0); // sentinel only; no mathematical meaning
+    assert(sieve.divisorCount[1] == 1 && sieve.countDivisors(2) == 2);
+    assert(sieve.primes == expectedPrimes);
+    assert(!sieve.isPrime(-1) && !sieve.isPrime(0) && !sieve.isPrime(1) && !sieve.isPrime(n + 1));
+    assert(sieve.countDivisors(1024) == 11); // 2^10
+    assert(sieve.countDivisors(2187) == 8);  // 3^7
+    assert(sieve.countDivisors(432) == 20);  // 2^4 * 3^3
+    assert(sieve.countDivisors(1225) == 9);  // 5^2 * 7^2
 }
 '''),
     ]

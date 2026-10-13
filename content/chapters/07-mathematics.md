@@ -110,36 +110,55 @@ ll qpow(ll a, long long e, ll mod) {
 
 ## 7.3 素数筛
 
-**适用范围：** 需要为一个已知上界内的整数批量判素或分解时使用；上界 `n>=0`。
-**能做什么：** 线性筛在 $O(n)$ 时间和空间内生成质数与最小质因子表。
-**输入 / 输出：** `PrimeSieve(n)` 建立 `[0,n]` 表；`isPrime(x)` 对任意整数返回布尔值，超出范围或 `x<2` 返回 `false`。构造对象拥有并修改自己的 `primes/minPrime`。
+**适用范围：** 已知上界 `n>=0`，需要批量判素、查询 `[1,n]` 内各整数的正因数个数或分解范围内整数时使用；单个数值很大的分解更适合 7.14 的试除模板。
+**能做什么：** 线性筛在 $O(n)$ 时间和空间内生成质数、最小质因子、该最小质因子的指数及正因数个数；判素和范围内因数个数查询均为 $O(1)$。因数数量维护新增两张长度 `n+1` 的 `int` 表。
+**输入 / 输出：** `PrimeSieve(n)` 建立 `[0,n]` 表；`isPrime(x)` 对任意整数返回布尔值，超出范围或 `x<2` 返回 `false`；`countDivisors(x)` 要求 `1<=x<=n`，返回 x 的正因数个数。`divisorCount[1]=1`；`divisorCount[0]=0` 仅为占位，不表示数学上的因数个数。
 
 **用法：**
 
 - 构造 `PrimeSieve sieve(n)` 后通过 `sieve.primes` 读取素数表。
-- 返回的 `primes` 递增，`minPrime[x]` 是 `x` 的最小质因子。
+- `primes` 递增，`minPrime[x]` 是 x 的最小质因子，`minPrimeExponent[x]` 是该因子在 x 中的指数。
+- `divisorCount[x]` 保存 x 的正因数个数；对素数为 2，对 1 为 1。筛表建好后查询 O(1)。
+- 例如 `sieve.countDivisors(12)==6`，`sieve.countDivisors(1)==1`。
 - `isPrime(x)` 可判断筛选范围内的整数。
 - 多次分解不超过 `n` 的数，可反复除以 `minPrime[x]`。
+- 对同一上界内的大量整数做计数适合本表；只分解一个大数时，筛到该数会浪费时间和空间。
 
 ```cpp
 #include <bits/stdc++.h>
 using namespace std;
 
 struct PrimeSieve {
-    // 数组下标就是被筛整数，合法查询范围为 [0,n]；0、1 的 minPrime 保持为 0。
-    vector<int> primes, minPrime;
+    // 数组下标就是被筛整数；0、1 的 minPrime 和 minPrimeExponent 为 0，divisorCount[0] 仅作占位。
+    vector<int> primes, minPrime, minPrimeExponent, divisorCount;
 
-    // 参数 n>=0；构造 [0,n] 筛表并填充本对象的 primes、minPrime。
-    explicit PrimeSieve(int n) : minPrime(n + 1, 0) {
+    // 若 i=p^e*m 且 gcd(p,m)=1，则 d(i)=(e+1)d(m)。已有最小质因子时 d(ip)=d(i)/(e+1)*(e+2)，新增质因子时 d(ip)=2d(i)；前者先做精确整除。
+    // 参数 n>=0；构造 [0,n] 筛表，填充素数、最小质因子、其指数和正因数个数；n=0/1 也有效。
+    explicit PrimeSieve(int n)
+        : minPrime(n + 1, 0), minPrimeExponent(n + 1, 0), divisorCount(n + 1, 0) {
+        if (n >= 1) divisorCount[1] = 1;
         for (int i = 2; i <= n; ++i) {
             if (minPrime[i] == 0) {
                 minPrime[i] = i;
+                minPrimeExponent[i] = 1;
+                divisorCount[i] = 2;
                 primes.push_back(i);
             }
             for (int p : primes) {
                 // 只用 p<=minPrime[i]：保证 i*p 恰由其最小质因子筛到一次。
                 if (p > minPrime[i] || 1LL * i * p > n) break;
-                minPrime[i * p] = p;
+                int product = i * p;
+                minPrime[product] = p;
+                if (p == minPrime[i]) {
+                    // 同一最小质因子指数由 e 增到 e+1，其余质因子的计数因子不变。
+                    minPrimeExponent[product] = minPrimeExponent[i] + 1;
+                    divisorCount[product] = divisorCount[i] /
+                        (minPrimeExponent[i] + 1) * (minPrimeExponent[product] + 1);
+                    break;
+                }
+                // p<minPrime[i] 时新增一个一次因子 p，tau 值乘 2。
+                minPrimeExponent[product] = 1;
+                divisorCount[product] = divisorCount[i] * 2;
             }
         }
     }
@@ -147,6 +166,11 @@ struct PrimeSieve {
     // 参数 x 为任意整数；返回 x 是否在筛范围内且为素数，越界返回 false，不改对象。
     bool isPrime(int x) const {
         return x >= 2 && x < (int)minPrime.size() && minPrime[x] == x;
+    }
+
+    // 参数 x 满足 1<=x<minPrime.size()；返回 x 的正因数个数，读取预处理表且不修改对象。
+    int countDivisors(int x) const {
+        return divisorCount[x];
     }
 };
 ```

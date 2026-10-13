@@ -984,3 +984,95 @@ struct DSUOnTree {
 // 示例：tree 为 1-based 无向邻接表，color[1..n] 可使用任意整数；答案按点号读取。
 // DSUOnTree solver(tree, color, 1); vector<int> distinct = solver.solve();
 ```
+
+## 5.15 单点修改线段树与自定义合并 {#point-segment-tree-custom-merge}
+
+**适用范围：** 长度固定的非空序列上的区间聚合与单点替换；区间合并须满足结合律，并提供左右两侧均为单位元的值。**能做什么：** 用调用者提供的 `merge` 维护满足上述代数条件的摘要，查询闭区间聚合；合并器须可在 `const` 查询中调用。示例存储仿射函数，演示可自定义合并规则与“维护函数值”是两件事。**输入 / 输出：** 构造器接收 1-based `initial[1..n]`、单位元和合并器；`pointSet(pos,value)` 替换一个位置，`rangeQuery(l,r)` 返回 `[l,r]` 按原序合并结果，要求 `1<=l<=r<=n`。时间：构造 $O(n)$、单点修改与区间查询 $O(\log n)$；空间 $O(n)$。不支持非结合合并或懒区间更新。
+
+仿射示例以模 `1e9+7` 表示 `f(x)=ax+b`，区间中的函数按下标从左到右依次作用，因此 `merge(left,right)=right∘left`，单位元是恒等函数。`a,b` 先归一化到 `[0,MOD)`；乘积小于 `MOD^2`，`long long` 足以容纳中间乘积与相加。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+
+template<class T, class Merge>
+struct PointSegmentTree {
+    int n;
+    T identity;
+    Merge merge;
+    vector<T> tree;
+
+    // initial 为 1-based 非空序列，identity 是 merge 的双侧单位元，merge 满足结合律；复制到内部树并建树，不修改入参。
+    explicit PointSegmentTree(const vector<T>& initial, T identity, Merge merge)
+        : n((int)initial.size() - 1), identity(identity), merge(merge), tree(2 * n, identity) {
+        assert(n >= 1);
+        for (int i = 1; i <= n; ++i) tree[n + i - 1] = initial[i];
+        for (int i = n - 1; i >= 1; --i) tree[i] = this->merge(tree[i << 1], tree[i << 1 | 1]);
+    }
+
+    // pos 为 1..n 的位置，value 是替换后的元素；返回 void，更新叶子及其祖先摘要，不改其他位置。
+    void pointSet(int pos, const T& value) {
+        int p = n + pos - 1;
+        tree[p] = value;
+        while (p > 1) {
+            p >>= 1;
+            tree[p] = merge(tree[p << 1], tree[p << 1 | 1]);
+        }
+    }
+
+    // l、r 为 1-based 闭区间且 1<=l<=r<=n；返回按原序聚合的摘要，不修改树。
+    T rangeQuery(int l, int r) const {
+        int left = l + n - 1, right = r + n;
+        T leftResult = identity, rightResult = identity;
+        while (left < right) {
+            if (left & 1) leftResult = merge(leftResult, tree[left++]);
+            if (right & 1) rightResult = merge(tree[--right], rightResult);
+            left >>= 1;
+            right >>= 1;
+        }
+        return merge(leftResult, rightResult);
+    }
+};
+
+constexpr ll MOD = 1000000007;
+
+// x 为任意 long long；返回模 MOD 的 [0,MOD) 代表元。
+ll normalizeMod(ll x) {
+    x %= MOD;
+    if (x < 0) x += MOD;
+    return x;
+}
+
+struct Affine {
+    ll a, b;
+};
+
+struct ComposeAffine {
+    // left、right 的系数均已归一化；返回先执行 left 再执行 right 的复合 right∘left。
+    Affine operator()(const Affine& left, const Affine& right) const {
+        return {right.a * left.a % MOD,
+                (right.a * left.b + right.b) % MOD};
+    }
+};
+
+// 原始系数可为任意 long long；返回系数归一化后的 f(x)=ax+b。
+Affine makeAffine(ll a, ll b) {
+    return {normalizeMod(a), normalizeMod(b)};
+}
+
+// 示范仿射函数的顺序组合与点替换；仅修改本地线段树，返回区间函数作用于 x 的结果。
+ll affineExample() {
+    vector<Affine> functions(4);
+    functions[1] = makeAffine(2, 1);
+    functions[2] = makeAffine(3, 4);
+    functions[3] = makeAffine(5, 6);
+    PointSegmentTree<Affine, ComposeAffine> st(functions, makeAffine(1, 0), ComposeAffine{});
+    st.pointSet(2, makeAffine(7, 2));
+    Affine combined = st.rangeQuery(1, 3);
+    ll x = normalizeMod(11);
+    return (combined.a * x + combined.b) % MOD;
+}
+```
+
+`merge` 是可替换的合并规则，存储类型 `T` 则决定区间摘要是什么。仿射例子可逐点替换函数，查询后得到的组合函数再作用于输入值；同一模板也可用整数与 `sum`/`min` 合并器维护区间和或最小值。
