@@ -4,25 +4,30 @@
 
 ## 构建
 
-需要 Python 3.10 或更新版本、Chrome/Chromium，以及 Poppler 提供的 `pdfinfo` 和 `pdftotext`。字体建议使用 Noto Serif CJK SC（正文）、Noto Sans CJK SC（标题）和 Maple Mono NF CN（代码）。CSS 已设置通用回退字体；缺少推荐字体时仍可构建，但排版可能略有差异。
+需要 Python 3.10+、Pandoc 3.1.3+，以及 Poppler 的 `pdfinfo`、`pdftotext`。PDF 使用 Typst；其编译器随 Python 依赖安装，无需 Chrome、TeXLive 或在线公式服务。
 
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements.txt
+make fonts
 make validate
 make all
 ```
 
-`make markdown`、`make html`、`make pdf` 可分别构建 Markdown、HTML 和 PDF；`make all` 一次生成三种格式：`output/markdown/icpcBoard.md`、内嵌样式的独立 HTML `output/html/icpcBoard.html` 和 A4 PDF `output/pdf/icpcBoard.pdf`。PDF 采用黑白单栏排版，含可点击目录和页码。代码使用 9 pt Maple Mono NF CN 字体，保留缩进，过长代码可以自然换页。
+`make fonts` 首次从字体官方仓库下载固定版本的 Noto CJK 与 Crimson Text，并校验 SHA-256；之后可离线构建。也可以自行安装这些字体，详见 [构建说明](docs/build.md)。
 
-若浏览器程序不在 `PATH` 中，可在 `config/build.json` 设置 `chrome_bin`。版式编辑 `styles/icpcBoard.css`，文档结构编辑 `templates/document.html`，源文件顺序和输出路径编辑 `config/build.json`。
+PDF 按 [OI-Wiki/OI-Wiki-export](https://github.com/OI-wiki/OI-Wiki-export) 的 Typst 版式重构：A4 单栏、10 pt 宋体正文、居中小节标题、奇偶页章节页眉、9 pt 代码、语法高亮、行号和交替浅灰底。目录可点击，跨页表格重复表头，代码长行换行且跨页保持原行号。目录使用 PDF 物理页码，便于打印与电子查找。
+
+`make markdown`、`make html`、`make typst`、`make pdf` 分别构建相应格式；`make all` 生成全部格式。主要输出为 `output/pdf/icpcBoard.pdf`，同时生成 Markdown、内嵌样式的独立 HTML 和可独立编译的 `output/typst/icpcBoard.typ`。HTML 提供相同视觉风格的阅读版；PDF 排版以 Typst 为准。
+
+PDF 版式编辑 `styles/icpcBoard.typ`，封面与目录编辑 `templates/document.typ`；HTML 样式编辑 `styles/icpcBoard.css`。输入顺序与输出路径仍由 `config/build.json` 管理。设计来源、改动与许可见 [排版说明](docs/typesetting.md)。
 
 ## 内容格式
 
 章节文件放在 `content/chapters/`，使用带零填充数字前缀的文件名（如 `01-...md`、`02-...md`），构建时按文件名排序。每章必须有且仅有一个一级标题 `#`。使用 `##` 作为小节标题、`cpp` 围栏代码块、标准 Markdown 表格，以及 `$...$` / `$$...$$` TeX 数学公式。关键词索引在 `config/build.json` 中单独列出，不纳入章节通配符。STL 章提供常用容器、迭代器与算法的精简速查；具体算法仍放在对应专题章，避免重复堆叠库函数清单。
 
-`make validate` 检查章节结构、围栏代码、显式标题 ID、不可见控制字符和配置输入，不生成交付文件。也可直接运行 `python scripts/build.py --format markdown|html|pdf|all`，按需使用各导出层。`make clean` 清除构建产物。
+`make validate` 检查章节结构、围栏代码、显式标题 ID、不可见控制字符和配置输入，不生成交付文件。也可直接运行 `python scripts/build.py --format markdown|html|typst|pdf|all`，按需使用各导出层。`make clean` 清除构建产物。
 
 ## 项目结构
 
@@ -30,8 +35,12 @@ make all
 config/build.json             源文件顺序、标题与输出路径
 content/chapters/01–09        九个编号章节
 content/10-keyword-index.md   题意关键词索引
-scripts/build.py             Markdown、HTML、PDF 构建器
-styles/icpcBoard.css          屏幕与 A4 打印样式
+scripts/build.py             统一构建入口
+scripts/typst_pdf.py          锚点兼容、公式转换与 PDF 校验
+scripts/setup_fonts.py        固定版本字体下载与校验
+styles/icpcBoard.typ          Typst 正文、页眉与代码排版
+styles/icpcBoard.css          HTML 阅读样式
+templates/document.typ       PDF 封面与目录
 templates/document.html      独立 HTML 框架
 tests/                        代码块检查与定向回归检查
 docs/                         构建说明与内容覆盖表
@@ -45,6 +54,8 @@ output/                       本地生成结果与保留的样例
 新增内容遵循 [docs/authoring.md](docs/authoring.md)：优先归入已有章节和检查入口，保持算法源文档与版式、导出配置分层。
 
 ## 代码检查
+
+排版构建的独立回归检查运行 `python3 tests/check_build.py`，覆盖公式转换、旧锚点、代码内容与跨页表头；不执行或修改算法代码。
 
 在安装了 `g++` 的环境中运行：
 

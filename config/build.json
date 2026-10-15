@@ -8,5 +8,9 @@
   "pdf": "output/pdf/icpcBoard.pdf",
   "after_chapters": [
     "content/10-keyword-index.md"
+  ],
+  "typst": "output/typst/icpcBoard.typ",
+  "font_paths": [
+    ".fonts"
   ]
 }

@@ -1,0 +1,62 @@
+[
+  {
+    "name": "CrimsonText-Bold.ttf",
+    "url": "https://raw.githubusercontent.com/google/fonts/7380f7cebbf2250460c23fd301b51bcbab162edf/ofl/crimsontext/CrimsonText-Bold.ttf",
+    "sha256": "a3a0765fc5e8d0b49b540a23aefe0184887dd79f06a0bdf4db7035cea6befa93"
+  },
+  {
+    "name": "CrimsonText-Italic.ttf",
+    "url": "https://raw.githubusercontent.com/google/fonts/7380f7cebbf2250460c23fd301b51bcbab162edf/ofl/crimsontext/CrimsonText-Italic.ttf",
+    "sha256": "4ed1699ac7c64e8b3d33f6bb8323c3d7206b0d7bacb9ee2d65c697e6014d29de"
+  },
+  {
+    "name": "CrimsonText-Regular.ttf",
+    "url": "https://raw.githubusercontent.com/google/fonts/7380f7cebbf2250460c23fd301b51bcbab162edf/ofl/crimsontext/CrimsonText-Regular.ttf",
+    "sha256": "48e6c5d5ad1d01599d374ecb817e15890d1feb3b8a3a88e527d44c90389e1f06"
+  },
+  {
+    "name": "CrimsonText-SemiBold.ttf",
+    "url": "https://raw.githubusercontent.com/google/fonts/7380f7cebbf2250460c23fd301b51bcbab162edf/ofl/crimsontext/CrimsonText-SemiBold.ttf",
+    "sha256": "802e84000740fec2a9fbe0ae09b6b6811bd86a78a0173b15d44450a1530e9410"
+  },
+  {
+    "name": "NotoSansCJKsc-Bold.otf",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Bold.otf",
+    "sha256": "b5f0d1a190a7f9b43c310a8850630af12553df32c4c050543f9059732d9b4c0a"
+  },
+  {
+    "name": "NotoSansCJKsc-Medium.otf",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Medium.otf",
+    "sha256": "ca094f6b0001fb048ca39ddd797a0cdb0179e1e55c6561e111c49c3e6a61d7b7"
+  },
+  {
+    "name": "NotoSansCJKsc-Regular.otf",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+    "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+  },
+  {
+    "name": "NotoSerifCJKsc-Bold.otf",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Serif/OTF/SimplifiedChinese/NotoSerifCJKsc-Bold.otf",
+    "sha256": "8af07d4b6c2e82bcc72a30e066eaf295f11b9424f4aad2eaa9fe0e9c3b38fc73"
+  },
+  {
+    "name": "NotoSerifCJKsc-Regular.otf",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Serif/OTF/SimplifiedChinese/NotoSerifCJKsc-Regular.otf",
+    "sha256": "2a2eae2628df83556c54018c41e20fa532c1b862c5256ae8b3f23feb918d12ca"
+  },
+  {
+    "name": "CrimsonText-OFL.txt",
+    "url": "https://raw.githubusercontent.com/google/fonts/7380f7cebbf2250460c23fd301b51bcbab162edf/ofl/crimsontext/OFL.txt",
+    "sha256": "50fd67cddc097377a5c871e8452b778bc5aedfa3480a705cb27c5e3a078218df"
+  },
+  {
+    "name": "NotoSansCJK-OFL.txt",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE",
+    "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+  },
+  {
+    "name": "NotoSerifCJK-OFL.txt",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Serif/LICENSE",
+    "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+  }
+]

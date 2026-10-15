@@ -1,3 +1,4 @@
 Markdown>=3.7,<4
 Pygments>=2.18,<3
 latex2mathml>=3.77,<4
+typst==0.15.0
