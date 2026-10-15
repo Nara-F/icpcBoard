@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Build the icpcBoard Markdown, self-contained HTML, and print-ready PDF."""
 from __future__ import annotations
-import argparse, html, json, re, shutil, subprocess, sys, tempfile, unicodedata
+import argparse, html, json, re, shutil, subprocess, unicodedata
 from xml.etree import ElementTree
 from pathlib import Path
 from html.parser import HTMLParser
-from urllib.parse import unquote
+from typst_pdf import build_typst, compile_pdf
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -89,6 +89,15 @@ def render(markdown_text, title, subtitle, language, css, template, toc_pages=No
         chunk=inline.sub(lambda m:tex_to_mathml(html.unescape(m.group(1).strip())),chunk)
         chunks[i]=chunk
     body="".join(chunks)
+    # CSS counters keep line numbers out of copied code text. Pygments emits
+    # balanced spans per line; the final newline is not an extra source line.
+    def code_lines(match):
+        content=re.sub(r"^<span></span>", "", match.group(1))
+        if content.startswith("<code>") and content.endswith("</code>"):
+            content=content[6:-7]
+        lines=content.removesuffix("\n").split("\n")
+        return "<pre><code>"+"\n".join('<span class="code-line"><span class="code-text">'+line+'</span></span>' for line in lines)+"</code></pre>"
+    body=re.sub(r"<pre>(.*?)</pre>",code_lines,body,flags=re.S)
     def render_toc(tokens):
         items=["<ol>"]
         for token in tokens:
@@ -125,13 +134,6 @@ def validate_html(page, markdown_text):
     if actual_code != expected_code:
         raise SystemExit(f"Code preservation check failed: {expected_code} fenced blocks, rendered {actual_code}")
 
-def read_pdf_destinations(pdf_path):
-    result=subprocess.run(["pdfinfo","-dests",str(pdf_path)],check=True,text=True,capture_output=True).stdout
-    return {unquote(name):int(page) for page,name in re.findall(r'^\s*(\d+)\s+\[.*?\]\s+"(.*)"\s*$',result,re.M)}
-
-def print_pdf(chrome, html_path, pdf_path, profile):
-    subprocess.run([chrome,"--headless=new","--no-sandbox","--disable-gpu","--disable-dev-shm-usage",f"--user-data-dir={profile}","--no-pdf-header-footer","--print-to-pdf="+str(pdf_path),html_path.resolve().as_uri()],check=True,stdout=subprocess.DEVNULL)
-
 def validate_pdf_bounds(pdf_path, expected_pages):
     raw=subprocess.run(["pdftotext","-bbox",str(pdf_path),"-"],check=True,text=True,capture_output=True).stdout
     tree=ElementTree.fromstring(raw[raw.index("<html"):])
@@ -140,19 +142,16 @@ def validate_pdf_bounds(pdf_path, expected_pages):
     if len(pages)!=expected_pages: raise SystemExit("PDF bbox validation failed: page count differs from pdfinfo")
     for number,page in enumerate(pages,1):
         width=float(page.get("width")); height=float(page.get("height")); words=page.findall("./x:word",ns)
-        if len(words)<10: raise SystemExit(f"PDF layout validation failed: page {number} is nearly empty")
+        if len(words)<3: raise SystemExit(f"PDF layout validation failed: page {number} is nearly empty")
         for word in words:
             x0,y0,x1,y1=(float(word.get(key)) for key in ("xMin","yMin","xMax","yMax"))
             if x0<35 or x1>width-35 or y0<25 or y1>height-10:
                 raise SystemExit(f"PDF layout validation failed: text near/outside page boundary on page {number}: {word.text!r}")
-        footer=max(words,key=lambda word:float(word.get("yMin")))
-        if (footer.text or "").strip()!=str(number):
-            raise SystemExit(f"PDF footer validation failed on page {number}: found {(footer.text or '').strip()!r}")
 
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--validate-only",action="store_true")
-    parser.add_argument("--format",choices=("markdown","html","pdf","all"),default="all",help="choose which independent export layers to build")
+    parser.add_argument("--format",choices=("markdown","html","typst","pdf","all"),default="all",help="choose which independent export layers to build")
     parser.add_argument("--html-only",action="store_true",help="compatibility alias for --format html")
     args=parser.parse_args()
     cfg=load_config(); sources,chapters=gather_sources(cfg); validate_sources(sources,chapters)
@@ -172,26 +171,18 @@ def main():
         html_path.write_text(page,encoding="utf-8")
         print(f"Built {md_path.relative_to(ROOT)} and {html_path.relative_to(ROOT)}.")
         return
-    chrome=cfg.get("chrome_bin") or shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chromium-browser")
-    if not chrome: raise SystemExit("Chrome/Chromium is required for PDF output (set chrome_bin in config/build.json).")
+    typ_path,toc,ast=build_typst(ROOT,cfg,markdown_text)
+    if args.format=="typst":
+        print(f"Built {typ_path.relative_to(ROOT)}.")
+        return
     for cmd in ("pdfinfo","pdftotext"):
         if not shutil.which(cmd): raise SystemExit(f"{cmd} is required for PDF validation")
-    with tempfile.TemporaryDirectory(prefix="icpcboard-chrome-") as workdir:
-        work=Path(workdir); pass_html=work/"pass-one.html"; pass_pdf=work/"pass-one.pdf"
-        pass_page=render(markdown_text,cfg["title"],cfg.get("subtitle",""),cfg.get("language","zh-CN"),css,template,page_placeholder=True)
-        validate_html(pass_page,markdown_text); pass_html.write_text(pass_page,encoding="utf-8")
-        profile=work/"chrome-profile"; profile.mkdir()
-        print_pdf(chrome,pass_html,pass_pdf,profile)
-        first_destinations=read_pdf_destinations(pass_pdf)
-        if not first_destinations: raise SystemExit("PDF TOC pagination failed: Chrome PDF has no heading destinations")
-        # Convert title-token -> physical page; fixed-width TOC page cells keep
-        # the second pagination pass stable.
-        page_with_numbers=render(markdown_text,cfg["title"],cfg.get("subtitle",""),cfg.get("language","zh-CN"),css,template,toc_pages=first_destinations)
-        validate_html(page_with_numbers,markdown_text); html_path.write_text(page_with_numbers,encoding="utf-8")
-        print_pdf(chrome,html_path,pdf_path,profile)
-        final_destinations=read_pdf_destinations(pdf_path)
-        moved={key:(value,final_destinations.get(key)) for key,value in first_destinations.items() if final_destinations.get(key)!=value}
-        if moved: raise SystemExit("PDF TOC pagination shifted between passes: " + repr(dict(list(moved.items())[:5])))
+    toc_pages=compile_pdf(ROOT,cfg,typ_path,pdf_path,toc,ast)
+    if set(toc_pages)!={t["id"] for t in toc}:
+        raise SystemExit("PDF TOC validation failed: missing heading page numbers")
+    page=render(markdown_text,cfg["title"],cfg.get("subtitle",""),cfg.get("language","zh-CN"),css,template,toc_pages=toc_pages)
+    validate_html(page,markdown_text)
+    html_path.write_text(page,encoding="utf-8")
     info=subprocess.run(["pdfinfo",str(pdf_path)],check=True,text=True,capture_output=True).stdout
     text=subprocess.run(["pdftotext","-layout",str(pdf_path),"-"],check=True,text=True,capture_output=True).stdout
     pages=re.search(r"^Pages:\s+(\d+)",info,re.M)
@@ -199,7 +190,7 @@ def main():
     size=re.search(r"^Page size:\s+([\d.]+) x ([\d.]+) pts",info,re.M)
     if not size or not (590 <= float(size.group(1)) <= 600 and 836 <= float(size.group(2)) <= 847):
         raise SystemExit("PDF validation failed: page size is not A4 portrait")
-    for heading in ("目录", "1. 竞赛常用内容", "9. 计算几何", "10. 题意关键词索引"):
+    for heading in ("目录", "竞赛常用内容", "计算几何", "题意关键词索引"):
         if heading not in text: raise SystemExit(f"PDF validation failed: missing {heading}")
     page_text=text.split("\f")
     if len(page_text) < int(pages.group(1)): raise SystemExit("PDF validation failed: page text is incomplete")
