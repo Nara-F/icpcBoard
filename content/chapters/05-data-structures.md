@@ -1242,17 +1242,21 @@ DFS 完整遍历完一个节点的子树后才离开它，因此子树节点的�
 
 树链剖分把一棵 1-based 连通无向树上两点间的路径拆成 $O(\log n)$ 个连续位置区间，供线段树等结构逐段处理。建树剖分耗时 $O(n)$、空间 $O(n)$；本模板的 `forPath` 产生 $O(\log n)$ 段。若每段在线段树上查询或更新一次，单次路径操作为 $O(\log^2 n)$。回调收到的区间端点闭合，但区间顺序不保证等于从 `u` 到 `v` 的路径顺序；可用于可交换聚合或各段独立更新。需要方向敏感的非交换运算时，必须额外记录方向并按路径顺序合并。
 
+先看复杂度从哪里来：若沿树路径逐点向父亲走，最坏要访问 $O(n)$ 个点；DFS 序只能把子树展平，不能让任意路径成为单段。HLD 选最大子树孩子为重儿子，第二次 DFS 优先走它，使重链连续。沿路径向上跨一条轻边时，父点的子树规模至少是轻儿子子树规模的两倍；反向从父点走向轻儿子时，子树规模至少减半。因此每条根到点路径经过 $O(\log n)$ 条轻边，任意两点路径也只跨 $O(\log n)$ 条重链。
+
+小例子：边为 `1-2,1-3,3-4,3-5`，以 1 为根，3 是 1 的重儿子，2 是轻儿子；若 4 被选为 3 的重儿子，重链为 `1-3-4`。查询 2 到 5 会得到覆盖点 2、1、3、5 的若干闭区间。
+
 **2. 变量在做什么**
 
 | 变量 | 含义 |
 |---|---|
-| `g[u]` | 无向邻接表；所有边必须在 `build` 前加入。 |
+| `g[u]` | 无向邻接表；通过 `addEdge` 加边，所有边必须在 `build` 前加入。 |
 | `parent[u]`, `depth[u]` | 以指定根定根后的父节点和深度，根深度为默认初值 0。 |
 | `sz[u]` | 以 `u` 为根的子树大小。 |
 | `heavy[u]` | `u` 的最大子树孩子；无孩子时为 `-1`。 |
 | `top[u]` | `u` 所在重链的链头。 |
 | `pos[u]` | 剖分后的 1-based 连续位置；同一重链连续，子树也对应连续区间。 |
-| `timer` | 分配 `pos` 时递增的全局位置计数器；对象构造时为 0。 |
+| `timer` | 分配 `pos` 时递增的全局位置计数器；对象构造时为 0，`build` 会重置。 |
 
 点编号和剖分位置是两个不同维度：路径区间传给维护结构时使用 `pos`，建树时遍历点编号，令 `base[pos[u]]=weight[u]` 即可，不需要逆映射；若要从位置取回点编号，再另建 `vertexAt[pos[u]]=u`。
 
@@ -1261,19 +1265,20 @@ DFS 完整遍历完一个节点的子树后才离开它，因此子树节点的�
 | 函数 | 参数、返回与作用 |
 |---|---|
 | `HLD(nodeCount)` | 分配 `1..nodeCount` 的邻接表和数组；点数应为正。 |
+| `addEdge(u,v)` | 要求两个合法不同点；向邻接表双向加入一条边，须在 `build` 前且每条边只加一次。 |
 | `dfs1(u,p)` | 内部递归，设置父亲、深度、子树大小及重儿子，返回子树大小；在合法树上由 `build` 调用。 |
 | `dfs2(u,head)` | 内部递归，设置链头和位置，并优先遍历重儿子；无返回值。 |
-| `build(root)` | 完成剖分；要求所有边已加入，`root` 在 `1..n`。对象只应构建一次；重复构建前须创建新对象，因为 `timer` 和 `heavy` 不会清零。省略参数时根为 1。 |
+| `build(root)` | 完成剖分；要求所有边已加入，`root` 在 `1..n`。会清空旧剖分数组并重建，要求输入仍为连通树；可重复调用或更换根。省略参数时根为 1。 |
 | `forPath(u,v,use)` | 将路径拆成闭区间并逐段调用 `use(l,r)`；回调返回值被忽略，需通过捕获外部对象实现查询或更新。区间参数是剖分位置，次序不承诺对应原路径方向。 |
 
 **4. 怎么调用**
 
-先加边，再调用一次 `build`；随后让 `forPath` 的回调把区间交给线段树。下例为链 `1-2-3`，路径查询得到的位置区间 `[1,3]`：
+用 `addEdge` 加完边，再调用 `build`；随后让 `forPath` 的回调把区间交给线段树。下例为链 `1-2-3`，路径查询得到的位置区间 `[1,3]`：
 
 ```text
 HLD hld(3);
-hld.g[1].push_back(2); hld.g[2].push_back(1);
-hld.g[2].push_back(3); hld.g[3].push_back(2);
+hld.addEdge(1, 2);
+hld.addEdge(2, 3);
 hld.build();
 // l/r 为剖分位置闭区间；回调输出端点，不修改 hld。
 hld.forPath(1, 3, [&](int l, int r) { cout << l << " " << r << "\n"; });
@@ -1286,24 +1291,30 @@ hld.forPath(1, 3, [&](int l, int r) { cout << l << " " << r << "\n"; });
 
 struct HLD {
     // heavy 子树最大者优先同链；任意树路径被拆成 O(log n) 个连续区间。
-    int n,timer=0;
+    int n, timer = 0;
     vector<vector<int>> g;
     vector<int> parent,depth,sz,heavy,top,pos;
-    // 参数 nodeCount 为点数；分配 1-based 邻接表和剖分数组，所有位置初始未构建。
+    // nodeCount 为点数（须 >=1）；分配 1-based 邻接表和剖分数组，不修改调用方点权。
     explicit HLD(int nodeCount)
         : n(nodeCount), g(nodeCount + 1), parent(nodeCount + 1),
           depth(nodeCount + 1), sz(nodeCount + 1),
-          heavy(nodeCount + 1, -1), top(nodeCount + 1), pos(nodeCount + 1) {}
-    // 参数 u 为当前子树根、p 为父点；返回子树大小，并写 parent/depth/sz/heavy；须在树上调用。
+          heavy(nodeCount + 1, -1), top(nodeCount + 1), pos(nodeCount + 1) {
+        assert(n >= 1);
+    }
+    // u、v 为 1..n 的树点；返回 void，向 g 双向加入一条边；必须在 build 前且每条边只加一次。
+    void addEdge(int u, int v) {
+        assert(1 <= u && u <= n && 1 <= v && v <= n && u != v);
+        g[u].push_back(v);
+        g[v].push_back(u);
+    }
+    // u 为当前子树根、p 为父点；返回子树大小，并写 parent/depth/sz/heavy；输入必须是树。
     int dfs1(int u, int p) {
-        // 后序汇总子树大小，并选出最大的孩子作为重儿子。
         parent[u] = p;
         sz[u] = 1;
+        heavy[u] = -1;
         int best = 0;
         for (int v : g[u]) {
-            if (v == p) {
-                continue;
-            }
+            if (v == p) continue;
             depth[v] = depth[u] + 1;
             int sub = dfs1(v, u);
             sz[u] += sub;
@@ -1314,38 +1325,39 @@ struct HLD {
         }
         return sz[u];
     }
-    // 参数 u 为子树根、head 为其重链链头；返回 void，按重儿子优先写 top/pos 并递增 timer。
+    // u 为子树根、head 为其链头；返回 void，按重儿子优先写 top/pos 并递增 timer。
     void dfs2(int u, int head) {
-        // 重儿子先访问以保证同一重链映射为连续位置。
         top[u] = head;
         pos[u] = ++timer;
-        if (heavy[u] != -1) {
-            dfs2(heavy[u], head);
-        }
+        if (heavy[u] != -1) dfs2(heavy[u], head);
         for (int v : g[u]) {
-            if (v != parent[u] && v != heavy[u]) {
-                dfs2(v, v);
-            }
+            if (v != parent[u] && v != heavy[u]) dfs2(v, v);
         }
     }
-    // 参数 root 是 1..n 的定根；返回 void，以当前 g 首次建立父深度、重儿子和重链位置。要求新对象且先加完所有边；重复 build 前须重新创建对象，因为 timer/heavy 不会清零。
+    // root 为 1..n 的定根；返回 void，清空旧剖分并重建所有数组；要求 g 是连通树。
     void build(int root = 1) {
+        assert(1 <= root && root <= n);
+        timer = 0;
+        fill(parent.begin(), parent.end(), 0);
+        fill(depth.begin(), depth.end(), 0);
+        fill(sz.begin(), sz.end(), 0);
+        fill(heavy.begin(), heavy.end(), -1);
+        fill(top.begin(), top.end(), 0);
+        fill(pos.begin(), pos.end(), 0);
         dfs1(root, 0);
         dfs2(root, root);
+        assert(timer == n);
     }
-    // 参数 u/v 为树上端点，use(l,r) 接收闭区间且返回值被忽略，可更新调用方维护的结构；返回 void，仅改局部端点副本，区间顺序不保证路径方向。
+    // u/v 为已 build 的树端点；use(l,r) 接收 1-based 闭区间且返回值被忽略；区间方向不保证，返回 void。
     template<class F>
-    void forPath(int u, int v, F use) { // use(l,r): 点权区间
+    void forPath(int u, int v, F use) const {
+        assert(1 <= u && u <= n && 1 <= v && v <= n);
         while (top[u] != top[v]) {
-            if (depth[top[u]] < depth[top[v]]) {
-                swap(u, v);
-            }
+            if (depth[top[u]] < depth[top[v]]) swap(u, v);
             use(pos[top[u]], pos[u]);
             u = parent[top[u]];
         }
-        if (depth[u] > depth[v]) {
-            swap(u, v);
-        }
+        if (depth[u] > depth[v]) swap(u, v);
         use(pos[u], pos[v]);
     }
 };
@@ -1372,7 +1384,9 @@ hld.forPath(1, 3, [&](int l, int r) { pathSum += st.rangeSum(l, r); });
 - 点权路径查询或更新：把回调区间 `[l,r]` 交给线段树处理，线段树下标使用 `pos`。
 - 边权路径查询：约定每条边的权值放在较深端点对应的位置；当两个端点落在同一条链时，最终区间要从 `pos[LCA]+1` 开始，排除代表 LCA 的位置。跨链段的链头位置代表的是与父亲相连的边，应保留。
 - 非交换聚合（如字符串拼接、矩阵乘法）：当前回调区间无方向信息且分段顺序不保证，需改写分解接口，同时维护从两端收集的区间和方向；不能直接按回调顺序合并。
-- 多测或更换根：每组数据/每次重建创建新对象，将边加入后以新根调用 `build(root)`。不要在旧对象上重复 `build`。
+- 多测或更换根：边加入后可再次调用 `build(root)`；它会清空并重建剖分数组。外部线段树也须按新 `pos` 重排。
+
+区分模型：路径加、路径和或路径最值通常使用 HLD 加线段树；只有子树操作时 DFS 序更简单。路径上的字符串拼接、矩阵乘法等不可交换操作，需要记录每段方向并按原路径顺序合并，当前 `forPath` 不提供方向。
 
 **6. 自检**
 
@@ -1381,13 +1395,14 @@ hld.forPath(1, 3, [&](int l, int r) { pathSum += st.rangeSum(l, r); });
 **7. 坑**
 
 - 结果像用了旧树：在加完边之前调用了 `build`；先完整建图再剖分。
-- 第二次 `build` 位置异常：`timer` 未归零且 `heavy` 可能残留；每次重建使用新对象。
+- 深链上递归深度可达 $n$，栈不足时需将两次 DFS 改为显式栈。
+- 重建后外部权值看似错乱：`build` 会改变 `pos`，需按新位置重建外部维护结构。
 - 路径和/最值适用、路径拼接错误：回调区间顺序不保证路径方向；方向敏感操作需同时维护区间方向和两端的合并顺序。
 - 边权答案多一条或少一条：最终同链段包含 LCA；将该段左端改为 `pos[LCA]+1`。
 
 **8. 一句话原理**
 
-每次跳过一条重链的链头向父亲移动，轻边跳转次数为 $O(\log n)$，每条重链则映射成连续位置区间。
+最大子树孩子优先进入同一条链；每次跨轻边时子树规模至少减半，所以任一路径只跨 $O(\log n)$ 条链，每条链映射成连续区间。
 
 ## 5.13 线段树：区间加、赋值与求和
 
@@ -1569,7 +1584,7 @@ ll answer = st.rangeSum(2, 5); // 32
 
 给定一棵静态有根树和每个节点的颜色，本模板一次求出所有节点子树中的不同颜色数。颜色可以是负数或很大的整数，模板会先离散化。输入是 1-based 连通无向树 `tree`、颜色数组 `color[1..n]` 和根 `root`；`solve()` 返回长度 `n+1` 的数组，`answer[u]` 是节点 `u` 的子树答案，0 号位不用。
 
-DSU on Tree 负责安排哪些节点加入或移出当前集合，桶、树状数组或线段树负责维护集合里的统计。本模板用颜色频次桶统计不同颜色数。它与普通并查集不同：这里没有合并集合代表元的操作，保留的是重儿子已经算好的频次状态。适合离线回答固定根下的子树统计，不直接支持在线改色、动态换根或路径查询。
+朴素地为每个点单独 DFS 其子树，一条链会扫描 $n+(n-1)+\cdots=O(n^2)$ 个节点；仅把子树展平为区间并不能消除重复扫描。DSU on Tree 的关键是保留最大子树的统计表，轻子树算完答案后清空，稍后再作为轻子树重新加入。每条轻边都会让子树规模至少翻倍，因此每个节点最多重新加入 $O(\log n)$ 次。 DSU on Tree 负责安排哪些节点加入或移出当前集合，桶、树状数组或线段树负责维护集合里的统计。本模板用颜色频次桶统计不同颜色数。它与普通并查集不同：这里没有合并集合代表元的操作，保留的是重儿子已经算好的频次状态。适合离线回答固定根下的子树统计，不直接支持在线改色、动态换根或路径查询。
 
 预处理 DFS 序为 $O(n)$，颜色排序与压缩为 $O(n\log n)$。统计中节点的加入、删除共 $O(n\log n)$ 次；本模板每次频次变化为 $O(1)$，所以总时间为 $O(n\log n)$、额外空间为 $O(n)$，包括递归栈。若改用每次增删为 $O(\log n)$ 的统计结构，统计总时间就会变成 $O(n\log^2 n)$。这些界限还要求每个节点的答案能在对应代价内读出。
 
@@ -1753,6 +1768,11 @@ vector<int> answer = solver.solve();
 | 维护子树内部边权 | 可将边放在较深端点上，但对 `u` 子树应排除连接 `u` 与父亲的那条边；不能把原点权统计原样套过去。 |
 | 深链数据 | 递归深度可达 `n`；栈不足时需将预处理和统计遍历改为显式栈。 |
 
+扩展到子树众数时，需同步改变加入、删除和答案读取。若只要求最高频率，可维护 `frequency[color]`、`countAtFrequency[f]` 和 `bestFrequency`：加入时更新频率桶并可能提高最大频率，删除时减少桶计数并在最高频率桶为空时向下移动。`keep=false` 仍须逐节点撤销。若还要并列时最小颜色，可对每个频率维护有序集合，操作增加 $O(\log n)$ 因子。只求最高频率时频率桶可均摊 $O(1)$。众数扩展不适用于在线改色或路径众数。
+
+模型识别：静态树、每个点都要回答一个子树统计，且统计可以由频率表增删维护时考虑 DSU on Tree；少数子树区间查询可考虑 DFS 序加离线树状数组，在线修改则考虑动态结构。
+
+
 **6. 自检**
 
 用上述五点树检查 `order[tin[u]]==u`、`tout[u]-tin[u]+1==subtreeSize[u]`，以及 `heavy[u]` 是否为最大子树的孩子。答案应为 `[2,2,1,1,1]`；若所有颜色相同则每个答案都为 1，若各节点颜色不同则 `answer[u]==subtreeSize[u]`。单点树答案为 1；负颜色、大颜色经压缩后仍应满足这些规律。连续调用两次 `solve()`，结果必须相同。
@@ -1920,3 +1940,2288 @@ ll affineExample() {
 **8. 一句话原理**
 
 每个节点保存其左段再接右段的摘要，单点替换后沿祖先重算，查询时按原序合并覆盖区间的节点。
+
+## 5.16 启发式合并（Small-to-Large） {#small-to-large}
+
+**1. 它是做什么的**
+
+输入是一棵静态、连通、1-based 有根树，每个点有一个可插入集合元素的颜色；更一般地，两个子问题的摘要可以逐元素合并。 对每个点输出其子树颜色集合的大小；模板实际只保存答案，集合所有权在递归返回时转移。 构造器输入 `tree[1..n]`、`color[1..n]` 和根 `root`；`solve()` 输出 `answer[1..n]`，下标 0 不使用，允许重复调用且不修改输入。 复杂度：本实现按子树节点数（质量）选择容器；若集合插入为 $O(\log n)$，总时间 $O(n\log^2 n)$、空间 $O(n)$；若哈希集合期望 $O(1)$ 插入，总时间期望 $O(n\log n)$。
+
+“小集合并入大集合”是一个通用的摊还技巧，不是某一种容器。朴素地把子树 `v` 的所有元素复制到 `u`，链状树会产生 $O(n^2)$ 次插入。这里不能把“不同颜色数”直接当作翻倍依据：例如 `{1,2}` 并 `{1,2,3}` 后只有一个新颜色。模板为每个返回的集合同时记录子树节点数 `mass`，按 `mass` 选较小的一侧；一次合并的扫描项数不超过质量较小侧的节点数。对每个原始节点项收费：若它的颜色已在大侧，项在这次扫描后消失，只收费这一次；若颜色保留为代表，它下一次随集合被搬运时，接收子树质量至少相对其所属子问题翻倍。因此每个原始项最多被收费 $O(\log n)$ 次，重复颜色不会被错误地用“集合大小翻倍”来证明。代码必须按质量比较，不能只按儿子编号或 DFS 顺序合并。
+
+看到“合并若干子树集合、查询不同元素/频次/集合摘要”，先问摘要是否支持逐元素插入和合并。如果摘要只能整体合并（例如某些复杂 DP），就不能直接套本节。DSU on Tree 通过清空临时表回答许多子树询问；启发式合并把每个递归结果的集合所有权转给父节点，孩子容器在合并后销毁，只在 `answer` 中保留孩子结果。线段树合并则把“元素”换成值域线段树节点，适合值域统计和第 k 小。
+
+下例返回每个点子树的不同颜色数。`set` 保证元素唯一但单次插入为 $O(\log n)$；要换成期望更快的 `unordered_set`，应同时处理哈希退化风险。
+
+**2. 变量在做什么**
+
+| 字段 | 含义 |
+|---|---|
+| `Bag::values` | 当前子树的颜色集合，使用 `set<int>` 去重；所有权由 `unique_ptr` 独占。 |
+| `Bag::mass` | 当前子树包含的节点数，用于选定较小容器；不能用不同颜色数替代。 |
+| `n`, `root` | 输入树点数与固定根；点号为 `1..n`。 |
+| `tree`, `color` | 输入树及颜色的常量引用；必须比对象活得更久。 |
+| `answer[u]` | 根为 `u` 的子树不同颜色数；0 号位不用。 |
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回与副作用 |
+|---|---|
+| `SmallToLargeDistinct(tree,color,root)` | 接收 1-based 连通无向树、`color[1..n]` 与合法根；保存输入引用并分配答案，不改输入。 |
+| `dfs(u,p)` | `u` 为当前子树根、`p` 为父点；返回含集合所有权和节点质量的 `Bag`，写入 `answer[u]`。仅供递归内部使用。 |
+| `solve()` | 无参数；重置答案并从 `root` 计算；返回长度 `n+1` 的答案向量，可重复调用。 |
+
+**4. 怎么调用**
+
+模板实现如下。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+
+struct SmallToLargeDistinct {
+    struct Bag {
+        unique_ptr<set<int>> values;
+        int mass = 0; // 对应子树节点数，用于严谨的小并大选择
+    };
+    int n, root;
+    const vector<vector<int>>& tree;
+    const vector<int>& color;
+    vector<int> answer;
+
+    // tree/color 为 1-based 连通无向树和颜色；root 在 1..n；只保存引用，调用期间入参须保持有效。
+    SmallToLargeDistinct(const vector<vector<int>>& tree,
+                         const vector<int>& color, int root)
+        : n((int)tree.size() - 1), root(root), tree(tree), color(color),
+          answer(n + 1) {
+        assert(n >= 1 && 1 <= root && root <= n);
+    }
+
+    // 在 u 的子树建立集合；p 是父点；返回集合所有权及子树质量，并写 answer[u]。
+    Bag dfs(int u, int p) {
+        Bag current{make_unique<set<int>>(), 1};
+        current.values->insert(color[u]);
+        for (int v : tree[u]) if (v != p) {
+            Bag other = dfs(v, u);
+            // 质量而非不同颜色数决定小侧；这样重复颜色也有明确的摊还收费。
+            if (current.mass < other.mass) swap(current, other);
+            current.values->insert(other.values->begin(), other.values->end());
+            current.mass += other.mass;
+        }
+        answer[u] = (int)current.values->size();
+        return current;
+    }
+
+    // 重新计算所有子树不同颜色数；返回下标 1..n 的答案，允许重复调用且不改输入。
+    vector<int> solve() {
+        fill(answer.begin(), answer.end(), 0);
+        Bag result = dfs(root, 0);
+        (void)result; // 根集合所有权在本次调用结束时释放，只保留 answer。
+        return answer;
+    }
+};
+```
+
+最小完整调用示例，树为 `1-2,1-3`，颜色为 `[5,5,8]`：
+
+```text
+vector<vector<int>> tree(4);
+tree[1] = {2, 3}; tree[2] = {1}; tree[3] = {1};
+vector<int> color = {0, 5, 5, 8};
+SmallToLargeDistinct solver(tree, color, 1);
+auto answer = solver.solve();
+assert(answer[1] == 2 && answer[2] == 1 && answer[3] == 1);
+```
+
+**5. 要改哪里**
+
+先确认摘要支持逐元素插入，且能定义重复元素规则；只支持整体合并的 DP 摘要不能套此模板。练习顺序：先统计不同颜色；再以 `unordered_map<颜色,频次>` 求子树众数；最后替换成自定义可插入摘要，并证明元素搬运次数。与 DSU on Tree 相比，本法把子树集合所有权交给父节点，孩子集合被消费；与线段树合并相比，本法逐元素插入，不保留值域分布结构。
+
+**6. 自检**
+
+手算两个子树质量分别为 2 和 7，且各有两个不同颜色：质量 2 的容器应并入质量 7 的容器，合并后 `mass=9`，答案按集合去重结果计算。重复调用 `solve()` 应得到相同答案。
+
+**7. 坑**
+
+不要按不同颜色数而非 `mass` 选小侧；重复颜色会破坏翻倍证明。交换 `Bag` 后继续使用新的 `current` 所有权，不能再访问已转移的容器。递归必须以父节点过滤邻接边；输入有环时会无限递归。`set` 插入为 $O(\log n)$，换哈希容器后复杂度是期望界且需考虑退化风险。
+
+**8. 一句话原理**
+
+始终把较小质量侧逐项加入较大侧，使仍存活的元素每次搬运后面对的子树质量至少翻倍。
+
+## 5.17 线段树合并（Segment Tree Merge） {#segment-tree-merge}
+
+**1. 它是做什么的**
+
+多棵互不共享节点、覆盖相同离散值域 $[lo,hi]$ 的动态线段树，要求合并值域频次、求第 k 小或继续修改；常见于树上每个子树的权值集合。 复用相同值域的空节点，把两棵动态开点线段树合成一棵。 `add(root,pos,delta)` 输入合法根编号、值域内位置和使所有频次非负的 `delta`，输出更新后的根；`merge(a,b)` 输入同一节点池、同一值域且节点集合完全不相交的两棵树（允许空根 0），输出合并后的唯一有效根；两个旧集合均被消费，不能再作为独立集合读取、修改或参与合并。不同根编号本身不足以保证不共享节点；非空时 `merge(a,a)` 非法。根编号是 `vector` 的 `int` 下标，`sum` 和计数必须不超过 `INT_MAX`。 复杂度：`add` 为 $O(\log\sigma)$；一次破坏性合并访问第二棵树的非空节点及重叠分支。设总共创建 $P$ 个节点、外部调用合并 $M$ 次，则这批合并的总成本为 $O(P+M)$：每次两个非空节点相遇都会让第二个节点退出独立可用的森林，它不能再次被消费；空节点返回的次数至多为这些递归分叉数的常数倍再加 $M$。典型每个点先建立一条值域路径，再沿原树合并 $n-1$ 次，创建与合并共 $O(n\log(\sigma+1))$。空间为已创建节点数。
+
+**先理解值域线段树。** 普通线段树的叶子常是数组位置；这里的叶子是“某个值”，叶子存这个值出现了几次。比如值域 `[1,8]` 中只有值 3 出现一次，只需创建 `[1,8]→[1,4]→[3,4]→[3,3]` 的四个节点，其余分支用编号 0 表示。这叫动态开点：需要哪条路径才创建哪些节点。`root` 是节点池下标，不是原树的点号，多个集合各自持有一个根。
+
+它和启发式合并的区别是：这里不搬运每个值，直接按值域递归。每个节点保存区间内出现次数；两个根相加，左儿子和左儿子合并，右儿子同理。零根 `0` 表示空树，因此可以把一棵空树直接返回。值域必须固定且两个根的 `[lo,hi]` 相同；因为节点不共享，递归才能把被消费的第二棵树节点计入一次。
+
+**2. 变量在做什么**
+
+| 字段 | 含义 |
+|---|---|
+| `lo`, `hi` | 所有集合共享的闭值域；中点计算要求 `hi-lo` 不溢出 `int`。 |
+| `tr` | 动态节点池；下标是节点编号，`tr[0]` 是全零空节点。 |
+| `Node::left/right` | 当前值域区间左右半边的根编号；0 表示该侧为空。 |
+| `Node::sum` | 当前区间的总频次；必须非负且不超过 `INT_MAX`。 |
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回与副作用 |
+|---|---|
+| `SegmentTreeMerge(lo,hi,reserveNodes)` | 建立本节点池和空根 0；要求 `lo<=hi`，预留容量只影响扩容。 |
+| `add(root,pos,delta)` | 在本池根表示的频次中将 `pos` 加 `delta`；返回更新根并修改节点池，要求位置合法且频次不变负。 |
+| `merge(a,b)` | 合并两根并返回唯一有效根；原集合被消费，要求相同节点池/值域且节点集合不共享。 |
+| `count(root,pos)` | 返回值 `pos` 的频次；不修改节点池，空根返回 0。 |
+| `kth(root,k)` | 返回根所表示多重集合的第 `k` 小值，`k` 从 1 起；非法根或排名触发断言。 |
+
+根编号必须来自当前对象，并满足 `0 <= root < tr.size()`；0 表示空树。接口不会全面检查根编号，`merge` 的两个根还必须满足不共享节点的所有权前提。
+
+**4. 怎么调用**
+
+模板实现如下。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+
+struct SegmentTreeMerge {
+    struct Node { int left = 0, right = 0, sum = 0; };
+    int lo, hi;
+    vector<Node> tr;
+
+    // lo/hi 是所有权值的闭区间；节点 0 为空；预留容量仅影响常数，不改变结果。
+    SegmentTreeMerge(int lo, int hi, int reserveNodes = 0)
+        : lo(lo), hi(hi) {
+        assert(lo <= hi);
+        tr.reserve(max(1, reserveNodes));
+        tr.push_back(Node{});
+    }
+
+    // 在 root 表示的树中把位置 pos 的计数增加 delta；返回新根，要求 pos 在值域内且计数不变为负。
+    int add(int root, int l, int r, int pos, int delta) {
+        if (!root) { root = (int)tr.size(); tr.push_back(Node{}); }
+        tr[root].sum += delta;
+        assert(tr[root].sum >= 0);
+        if (l == r) return root;
+        int m = l + (r - l) / 2;
+        if (pos <= m) tr[root].left = add(tr[root].left, l, m, pos, delta);
+        else tr[root].right = add(tr[root].right, m + 1, r, pos, delta);
+        return root;
+    }
+
+    // pos 为 lo..hi 的值；返回更新后的根，原 root 可为 0；只修改内部节点池。
+    int add(int root, int pos, int delta = 1) {
+        assert(lo <= pos && pos <= hi);
+        return add(root, lo, hi, pos, delta);
+    }
+
+    // 破坏性合并根 a、b 的频次并返回结果根；a/b 可有一个为 0，非空时必须 a!=b 且两树节点不共享。
+    int merge(int a, int b, int l, int r) {
+        if (!a) return b;
+        if (!b) return a;
+        tr[a].sum += tr[b].sum;
+        if (l != r) {
+            int m = l + (r - l) / 2;
+            tr[a].left = merge(tr[a].left, tr[b].left, l, m);
+            tr[a].right = merge(tr[a].right, tr[b].right, m + 1, r);
+        }
+        return a;
+    }
+
+    // a、b 来自本池同一值域且节点完全不共享；返回唯一有效的合并根，旧集合不可再独立使用。
+    int merge(int a, int b) {
+        assert(a == 0 || b == 0 || a != b); // merge(a,a) 会重复累计，调用契约禁止它
+        return merge(a, b, lo, hi);
+    }
+
+    // root 为当前频次树，pos 为值；返回该值的出现次数，root 可为 0。
+    int count(int root, int l, int r, int pos) const {
+        if (!root) return 0;
+        if (l == r) return tr[root].sum;
+        int m = l + (r - l) / 2;
+        return pos <= m ? count(tr[root].left, l, m, pos)
+                        : count(tr[root].right, m + 1, r, pos);
+    }
+
+    // root 为频次树、pos 为 lo..hi 的值；返回该值的出现次数，root 可为 0。
+    int count(int root, int pos) const {
+        assert(lo <= pos && pos <= hi);
+        return count(root, lo, hi, pos);
+    }
+
+    // root 为频次树；k 从 1 开始；返回全局第 k 小值，k 非法时断言失败。
+    int kth(int root, int l, int r, int k) const {
+        assert(root && 1 <= k && k <= tr[root].sum);
+        if (l == r) return l;
+        int m = l + (r - l) / 2;
+        int leftSum = tr[tr[root].left].sum;
+        if (k <= leftSum) return kth(tr[root].left, l, m, k);
+        return kth(tr[root].right, m + 1, r, k - leftSum);
+    }
+
+    // 返回根的第 k 小值；要求根非空且 1<=k<=总计数。
+    int kth(int root, int k) const { return kth(root, lo, hi, k); }
+};
+```
+
+最小调用示例，可直接放在 `main` 函数体内：合并 `{3}` 与 `{1,3}`，结果第 2 小为 3。
+
+```text
+SegmentTreeMerge st(1, 8);
+int a = st.add(0, 3);
+int b = st.add(0, 1);
+b = st.add(b, 3);
+int merged = st.merge(a, b);
+assert(st.count(merged, 3) == 2);
+assert(st.kth(merged, 1) == 1 && st.kth(merged, 2) == 3);
+```
+
+**5. 要改哪里**
+
+树上后序合并时，先记录孩子答案，再将孩子根交给父亲并把孩子根置 0；该模板不为每棵子树保留版本。先离散化到紧凑值域；练习顺序：频次合并、每个子树第 k 小、再结合差分根或离线删除分析重叠节点。分裂操作需另行设计节点所有权。本结构与主席树不同：本结构破坏旧根并复用节点，主席树复制路径保留历史版本。
+
+**6. 自检**
+
+值域 `[1,8]`：A=`{3:1}`、B=`{1:1,3:1}`，合并后总频次应为 3，`kth(1)=1`、`kth(2)=3`、`count(3)=2`。若合并空根与非空根，结果应等于非空根。
+
+**7. 坑**
+
+两个根必须来自同一节点池和同一值域，且节点集合不得共享；非空 `merge(a,a)` 会重复累计。合并后第二棵树不可继续独立读取或修改。`sum`、总频次、节点池下标和 `hi-lo` 都受 `int` 范围限制；不要把总频次误当不同值个数。
+
+**8. 一句话原理**
+
+相同值域的对应节点频次相加，空分支直接复用另一侧节点；节点所有权随破坏性合并转移。
+
+## 5.18 主席树（可持久化线段树） {#persistent-segment-tree}
+
+**1. 它是做什么的**
+
+静态数组区间第 k 小、前缀版本查询，以及树上路径第 k 小；值域可离散化为 $[1,\sigma]$。 每次单点加入只复制根到叶子的 $O(\log\sigma)$ 个节点，旧版本仍可查询。 `add(previous,pos,delta)` 输入合法旧版本根、值域内离散位置和合法增量，输出不破坏旧版本的新根；`kthRange` 输入两个前缀根及合法 1-based `k`，`kthPath` 输入四根及合法 `k`，均输出离散值编号。每个 `sum`、所有中间频次、节点池下标及 `hi-lo` 必须在 `int` 范围内；推荐离散化为 `[1,σ]`。 复杂度：建立 $n$ 个前缀版本为 $O(n\log\sigma)$ 时间和空间；一次区间/路径第 k 小为 $O(\log\sigma)$；空间不能低于所有版本复制出的节点数。
+
+初学者可以把“主席”理解成“每个前缀都有一份几乎相同的频次表”。版本 `root[i]` 表示前 `i` 个元素；区间 `[l,r]` 的频次等于 `root[r] - root[l-1]`。递归向左时，左半段出现次数是两根左儿子的 `sum` 之差；若 `k` 不超过它就向左，否则减去左计数向右。每次只复制一条根到叶路径，所以不会真的复制整棵树。
+
+数组小例子：`a=[2,1,3,2]` 时，`root[4]-root[1]` 表示区间 `[2,4]` 的频次 `{1:1,2:1,3:1}`，第 2 小是 2。树上例子中总根为 1，路径 `2-1-3` 的点权为 `[3,1,2]`，令 `w=1`，四根公式应得到这三个值，排序后的第 2 小为 2。
+
+树上路径使用四根：令 `root[u]` 表示从总根到 `u`（含 `u`）的权值版本，`w=lca(u,v)`，则路径频次为
+`root[u] + root[v] - root[w] - root[parent[w]]`。
+不要把它只记成“公共前缀减一次”：根到 `u`、根到 `v` 让 LCA 以上的点被算两次，LCA 本身也被算两次；减去 `root[w]` 和 `root[parent[w]]` 后，LCA 以上的系数为 $2-1-1=0$，LCA 的系数为 $2-1=1$，路径中更深点只出现一次。因而四根在每个值域叶上的组合频次都应非负；若出现负数，通常是 LCA/父根或版本定义错了。`parent[root]=0` 且版本 0 为空，正好统一根的边界。向下递归时左计数使用四个左儿子和的同号组合，`k` 必须在总路径长度内。
+
+**2. 变量在做什么**
+
+| 字段 | 含义 |
+|---|---|
+| `lo`, `hi` | 离散值编号的闭区间；建议取 `[1,σ]`。 |
+| `tr` | 持久化节点池；节点下标是根编号，节点 0 表示空版本。 |
+| `Node::left/right` | 值域左右半段的版本根。更新时只复制被访问路径上的节点。 |
+| `Node::sum` | 当前值域区间的出现次数；路径四根组合得到的各区间频次应非负。 |
+| `root[i]` | 由调用方维护的版本根；数组场景可代表前 i 个元素，树场景可代表根到点路径。 |
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回与副作用 |
+|---|---|
+| `PersistentSegmentTree(lo,hi,reserveNodes)` | 建立空版本 0；要求 `lo<=hi`，容量参数仅影响扩容。 |
+| `add(previous,pos,delta)` | 从已有版本复制根到叶路径，在位置加 `delta`；返回新版本根，旧版本不变；位置合法且任一频次不得为负。 |
+| `kthRange(rootR,rootBeforeL,k)` | 两根分别代表前缀 `[1..r]`、`[1..l-1]`；返回区间第 k 小的离散值，k 从 1 起。 |
+| `kthPath(ru,rv,rlca,rparent,k)` | 按 `+ru+rv-rlca-rparent` 组合四根；返回树路径第 k 小离散值，父根可为 0。 |
+| `kth4(...)` | 内部按四根组合计数递归；要求总路径/区间频次中 k 合法，返回离散编号。 |
+
+**4. 怎么调用**
+
+模板实现如下。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+
+struct PersistentSegmentTree {
+    struct Node { int left = 0, right = 0, sum = 0; };
+    int lo, hi;
+    vector<Node> tr;
+
+    // lo/hi 是离散值域闭区间；版本 0 为空；reserveNodes 只用于减少扩容。
+    PersistentSegmentTree(int lo, int hi, int reserveNodes = 0) : lo(lo), hi(hi) {
+        assert(lo <= hi);
+        tr.reserve(max(1, reserveNodes));
+        tr.push_back(Node{});
+    }
+
+    // 从 previous 版本在 pos 增加 delta；返回新版本根，旧版本不变，pos 必须在值域内。
+    int add(int previous, int l, int r, int pos, int delta) {
+        int now = (int)tr.size();
+        tr.push_back(tr[previous]);
+        tr[now].sum += delta;
+        assert(tr[now].sum >= 0); // 合法 delta 不得让任一值域区间频次为负
+        if (l == r) return now;
+        int m = l + (r - l) / 2;
+        if (pos <= m) tr[now].left = add(tr[previous].left, l, m, pos, delta);
+        else tr[now].right = add(tr[previous].right, m + 1, r, pos, delta);
+        return now;
+    }
+
+    // previous 是已有版本根；返回只比它多 delta 个 pos 的新根。
+    int add(int previous, int pos, int delta = 1) {
+        assert(0 <= previous && previous < (int)tr.size());
+        assert(lo <= pos && pos <= hi);
+        return add(previous, lo, hi, pos, delta);
+    }
+
+    // 四个版本根按 +rootU +rootV -rootLca -rootParentLca 组合；返回路径第 k 小的离散值。
+    int kth4(int ru, int rv, int rlca, int rparent, int l, int r, int k) const {
+        int total = tr[ru].sum + tr[rv].sum - tr[rlca].sum - tr[rparent].sum;
+        assert(1 <= k && k <= total);
+        if (l == r) return l;
+        int m = l + (r - l) / 2;
+        int leftCount = tr[tr[ru].left].sum + tr[tr[rv].left].sum
+                      - tr[tr[rlca].left].sum - tr[tr[rparent].left].sum;
+        if (k <= leftCount)
+            return kth4(tr[ru].left, tr[rv].left, tr[rlca].left,
+                        tr[rparent].left, l, m, k);
+        return kth4(tr[ru].right, tr[rv].right, tr[rlca].right,
+                    tr[rparent].right, m + 1, r, k - leftCount);
+    }
+
+    // 四根均为本对象版本根，k 从 1 开始；返回路径第 k 小值，父根为空时传 0。
+    int kthPath(int ru, int rv, int rlca, int rparent, int k) const {
+        return kth4(ru, rv, rlca, rparent, lo, hi, k);
+    }
+
+    // 两个前缀版本 rootR、rootBeforeL 表示 [1..r] 和 [1..l-1]；返回区间第 k 小值。
+    int kthRange(int rootR, int rootBeforeL, int k) const {
+        return kth4(rootR, 0, rootBeforeL, 0, lo, hi, k);
+    }
+};
+```
+
+最小调用示例，可直接放在 `main` 函数体内：数组 `[2,1,3]` 的整个区间第 2 小为 2。
+
+```text
+PersistentSegmentTree pst(1, 3);
+int root0 = 0;
+int root1 = pst.add(root0, 2);
+int root2 = pst.add(root1, 1);
+int root3 = pst.add(root2, 3);
+assert(pst.kthRange(root3, root0, 2) == 2);
+assert(pst.kthRange(root3, root1, 1) == 1); // 区间 [2,3]
+```
+
+**5. 要改哪里**
+
+先排序去重并把原值映射到 `[1,σ]`，查询后再映射回来。树路径版本令 `root[u]` 表示总根到 u（含 u）的频次，再结合 LCA 和父根；四根公式中的 LCA 父根不能省略。练习顺序：静态数组区间第 k 小、接倍增 LCA 做树路径第 k 小、再估算前缀版本内存。若每次更新复制约 `ceil(log2(σ))+1` 个节点、节点有三个 int，`n=10^5` 且深度约 18 时节点池约 22 MB，另需根数组和容器容量。主席树不适合直接处理会改变大量值的区间更新。
+
+**6. 自检**
+
+数组 `[2,1,3,2]` 中 `root[4]-root[1]` 表示 `[2,4]` 的频次 `{1:1,2:1,3:1}`，第 2 小为 2。路径 `2-1-3` 点权 `[3,1,2]` 时，四根公式应计入这三个点各一次，第 2 小为 2。旧根查询结果在后续 `add` 后仍应不变。
+
+**7. 坑**
+
+漏减 `root[parent[lca]]` 会多算 LCA 以上点；将第 k 小写成第 k 大、忘记离散值映射、传入非法 k 或令 delta 制造负频次也会出错。`sum`、中间频次、节点池下标和 `hi-lo` 必须能放进 int；所有根必须来自同一对象且保持有效。
+
+**8. 一句话原理**
+
+路径复制保留旧版本；两个前缀版本或四个树路径版本的频次差组合后，在值域树上按左侧计数逐层定位第 k 小。
+
+## 5.19 虚树 {#virtual-tree}
+
+**1. 它是做什么的**
+
+原树静态、同一棵树上有很多次询问，每次只关心一小组关键点以及它们之间的祖先关系。 把关键点和它们相邻关键点的 LCA 压缩成一棵边数为 $O(k)$ 的树；本模板输出虚树点集及有向父子边。 构造非空的 1-based 无权连通树并调用 `build(root)`，每次输入合法原树点号组成的关键点列表（允许重复）；返回 `vertices` 原点号列表、`edges` 中的 `(父点,子点,原树边数距离)` 和虚树根，空询问返回空列表及根 0。不改变原树。复杂度：预处理倍增 LCA 为 $O(n\log n)$；一次输入 $k$ 项关键点（允许重复）的询问为 $O(k\log k+k\log n)$：需要对相邻点求 LCA、加入至多 $k-1$ 个 LCA、再次排序并用栈建树。即使调用者已经把关键点按 DFS 序排序，本模板仍会求这些 LCA 并对补点后的 `all` 第二次排序；若另写接口复用排序结果，才可省去第一次排序。空间 $O(n\log n+k)$。
+
+朴素地在原树上对每次询问跑 DFS，会扫描整棵 $n$ 点树，即使询问只给出 $k$ 个关键点。只保留关键点又可能断开祖先关系：两个关键点的路径中间的分叉祖先也会影响距离、染色、最小割等 DP。虚树补入相邻关键点的 LCA，恰好保留了这些分叉点，其他原树枝叶都可以忽略。
+
+建树步骤是：按 `tin` 排序并去重关键点；对相邻点加入 LCA；再排序去重；用单调栈扫描，栈顶是当前 DFS 路径上最近的已保留祖先，弹出到它成为当前点的父亲。$k$ 个关键点只有 $k-1$ 对相邻点，因此至多加入 $k-1$ 个 LCA；合并去重后保留点数至多 $2k-1$，边数至多 $2k-2$。栈扫描本身是线性的，但整个询问不能因此写成线性。代码返回边权 `depth[child]-depth[parent]`，它表示原树路径长度，方便在虚树上做距离 DP。
+
+虚树和 HLD 的分工不同：HLD 适合动态路径修改/查询；虚树适合“每次询问关键点很少、原树很大”的离线或在线多询问。它通常与 LCA、树上 DP、点权/边权最短距离组合，也可先对关键点做去重和祖先过滤。虚树 DP 的临时标记、度数和答案数组只应访问本次 `vertices` 中的至多 $2k-1$ 个点，询问结束后清空这些点，不能每次清空整棵原树。边界是关键点为空时返回空；只有一个关键点时虚树只有一个点、没有边。
+
+**2. 变量在做什么**
+
+| 字段 | 含义 |
+|---|---|
+| `n`, `logn`, `timer` | 原树点数、倍增层数、DFS 进入计时器。 |
+| `g[u]` | 原树无向邻接表；必须在 `build` 前完成。 |
+| `tin[u]`, `tout[u]` | DFS 进入时间及子树区间末端；祖先判定使用同一轮 DFS 的两个时间。 |
+| `depth[u]` | 相对预处理根的深度；虚树边权用深度差表示原树距离。 |
+| `up[j][u]` | 节点 u 向上 `2^j` 步的祖先；0 表示越过根。 |
+| `VirtualTreeResult::vertices` | 按 DFS 序排列的保留原树点。 |
+| `VirtualTreeResult::edges` | `(父点,子点,原树距离)` 三元组；不是原树直接边。 |
+| `VirtualTreeResult::root` | 虚树根；空询问时为 0。 |
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回与副作用 |
+|---|---|
+| `VirtualTree(nodeCount)` | 分配 `1..n` 图和 LCA 表；要求 `n>=1`。 |
+| `addEdge(u,v)` | 接收合法不同点，双向加入原树边；必须在 `build` 前调用。 |
+| `build(root)` | 清空并重建 DFS 序、深度和倍增表；要求原图是连通树，可重复调用或换根。 |
+| `isAncestor(u,v)` | 要求已 build 且点号合法；返回 u 是否为 v 的祖先（含相等），不改状态。 |
+| `lca(u,v)` | 要求已 build 且点号合法；返回最近公共祖先，不改状态。 |
+| `buildVirtual(special)` | 接收原树点号向量（允许重复）；要求已 build；返回去重关键点及必要 LCA 构成的虚树，不改原树。空输入返回空结果。 |
+
+**4. 怎么调用**
+
+模板实现如下。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+
+struct VirtualTreeResult {
+    vector<int> vertices;                 // 按 DFS 序排列的原树点号
+    vector<tuple<int, int, int>> edges;   // (父点, 子点, 原树距离)
+    int root = 0;                         // vertices 非空时为虚树根
+};
+
+struct VirtualTree {
+    int n, logn, timer = 0;
+    vector<vector<int>> g;
+    vector<int> tin, tout, depth;
+    vector<vector<int>> up;
+
+    // nodeCount 为原树点数；分配 1-based 图和 LCA 表，要求随后加入 n-1 条树边。
+    explicit VirtualTree(int nodeCount)
+        : n(nodeCount), logn(1), g(nodeCount + 1), tin(nodeCount + 1),
+          tout(nodeCount + 1), depth(nodeCount + 1) {
+        assert(n >= 1);
+        while ((1 << logn) <= n) ++logn;
+        up.assign(logn, vector<int>(n + 1, 0));
+    }
+
+    // u、v 为 1..n；返回 void，向原树加入无向边；必须在 build 前调用。
+    void addEdge(int u, int v) {
+        assert(1 <= u && u <= n && 1 <= v && v <= n && u != v);
+        g[u].push_back(v);
+        g[v].push_back(u);
+    }
+
+    // u 的 DFS 进入/离开时间；p 是父点；返回 void，写 tin/tout/depth/up[0]。
+    void dfs(int u, int p) {
+        tin[u] = ++timer;
+        up[0][u] = p;
+        for (int j = 1; j < logn; ++j) up[j][u] = up[j - 1][up[j - 1][u]];
+        for (int v : g[u]) if (v != p) {
+            depth[v] = depth[u] + 1;
+            dfs(v, u);
+        }
+        tout[u] = timer;
+    }
+
+    // root 为原树根；返回 void，清空并重建 tin/tout/depth/up；要求原图为连通树。
+    void build(int root = 1) {
+        assert(1 <= root && root <= n);
+        timer = 0;
+        fill(tin.begin(), tin.end(), 0);
+        fill(tout.begin(), tout.end(), 0);
+        fill(depth.begin(), depth.end(), 0);
+        for (auto& row : up) fill(row.begin(), row.end(), 0);
+        dfs(root, 0);
+        assert(timer == n);
+    }
+
+    // 判断 u 是否为 v 的祖先（包括 u==v）；要求已 build 且点号合法；返回 bool，不改状态。
+    bool isAncestor(int u, int v) const {
+        return tin[u] <= tin[v] && tout[v] <= tout[u];
+    }
+
+    // 返回 u、v 的最近公共祖先；要求已 build 且两点在树中。
+    int lca(int u, int v) const {
+        if (isAncestor(u, v)) return u;
+        if (isAncestor(v, u)) return v;
+        int x = u;
+        for (int j = logn - 1; j >= 0; --j)
+            if (up[j][x] != 0 && !isAncestor(up[j][x], v)) x = up[j][x];
+        return up[0][x];
+    }
+
+    // special 是本次询问的原树关键点，可重复；返回含关键点及必要 LCA 的虚树，要求已 build。
+    VirtualTreeResult buildVirtual(vector<int> special) const {
+        VirtualTreeResult result;
+        if (special.empty()) return result;
+        // 比较器参数是原树点号；返回 DFS 进入时间的严格次序，不修改点集。
+        sort(special.begin(), special.end(), [&](int a, int b) { return tin[a] < tin[b]; });
+        special.erase(unique(special.begin(), special.end()), special.end());
+        vector<int> all = special;
+        for (int i = 1; i < (int)special.size(); ++i) all.push_back(lca(special[i - 1], special[i]));
+        // 比较器参数是关键点或 LCA；返回同一 DFS 序次序，不修改 all。
+        sort(all.begin(), all.end(), [&](int a, int b) { return tin[a] < tin[b]; });
+        all.erase(unique(all.begin(), all.end()), all.end());
+        result.vertices = all;
+        vector<int> st;
+        for (int x : all) {
+            while (!st.empty() && !isAncestor(st.back(), x)) st.pop_back();
+            if (!st.empty())
+                result.edges.push_back({st.back(), x, depth[x] - depth[st.back()]});
+            st.push_back(x);
+        }
+        result.root = all.front();
+        return result;
+    }
+};
+```
+
+最小调用示例，可直接放在 `main` 函数体内：原树为 `1-2,1-3,2-4,2-5`，关键点 `{4,5,3}`，其虚树应有根 1、五个保留点和四条边。
+
+```text
+VirtualTree vt(5);
+vt.addEdge(1, 2); vt.addEdge(1, 3);
+vt.addEdge(2, 4); vt.addEdge(2, 5);
+vt.build(1);
+auto result = vt.buildVirtual({4, 5, 3});
+assert(result.root == 1);
+assert(result.vertices.size() == 5 && result.edges.size() == 4);
+```
+
+**5. 要改哪里**
+
+每次询问只在返回的 `vertices` 上初始化并清理 DP 状态，避免扫描整棵原树。虚树边权是原树距离，不是原树单边，距离 DP 应使用该权值。模型选择上，HLD 适合动态路径修改/查询；虚树适合原树大、每次询问关键点少的多询问。练习：输出边和距离、关键点两两路径总长度、在虚树上做关键点覆盖或最近关键点 DP。
+
+**6. 自检**
+
+手算关键点 `{4,5,7}`，若相邻 LCA 为 2 和 1，虚树点集为 `{1,2,4,5,7}`，边为 `1-2,2-4,2-5,1-7`；2 到 4 的压缩边权仍等于原树距离。空关键点返回空点边且根 0；单关键点只有一个点、无边。
+
+**7. 坑**
+
+关键点重复时先去重；只加入关键点会丢失分叉祖先，必须补入 DFS 序相邻关键点的 LCA。`buildVirtual` 会对输入排序、补 LCA 后再次排序，单次复杂度为 $O(k\log k+k\log n)$，不能只报栈扫描的线性复杂度。`tout` 与 `tin` 必须来自同一次 build；虚树边代表原树压缩路径。递归 DFS 在深链上可能栈溢出。若使用同根 HLD，`pos[u] <= pos[v] < pos[u]+sz[u]` 也可用于祖先判断；此实现用 `tin/tout`。
+
+**8. 一句话原理**
+
+关键点按 DFS 序排列后补入相邻 LCA，再用祖先栈连接，删去对本次问题无贡献的原树分支。
+
+## 5.20 带权并查集 {#weighted-dsu}
+
+**1. 它是做什么的**
+
+有若干元素，关系以“两个元素的数值差”给出，并且关系会逐条加入。例如，题目告诉我们 `value[y]-value[x]=w`，还要判断新关系是否与旧关系矛盾，或查询两个已连通元素的差值。它适合只加边、不删除边的约束系统。
+
+在近乎常数的摊还时间内判断两点是否同组、加入差值约束，并查询同组两点的相对差；加入一条已知的矛盾约束时返回 `false`。
+
+顶点编号为 `1..n`。`unite(x,y,w)` 表示约束 `value[y]-value[x]=w`，返回 `true` 表示与当前约束相容，`false` 表示两点已在同组但推导出的差值不同。`relation(x,y)` 返回 `value[y]-value[x]`；两点不连通时返回空的 `optional`。模板假设所有中间和与答案能放进 `long long`，需要更大范围时将 `long long` 换成 `__int128`。
+
+复杂度：每次合并、查找或查询的均摊时间为 $O(\alpha(n))$，空间 $O(n)$。
+
+### 先理解普通并查集
+
+普通并查集把若干元素分成互不相交的集合。每棵树的根代表集合，`find` 找根，`union` 把两棵树接起来；路径压缩和按大小合并使树高极小。普通并查集只能回答“是否连通”，没有记录组内元素之间的距离。
+
+### 多保存一个“到父亲的差”
+
+对每个结点 `x` 维护
+
+$$d[x]=value[x]-value[parent[x]].$$
+
+父亲改变后，`find(x)` 的路径压缩把所有差累加，于是压缩结束时 `d[x]` 变成 `value[x]-value[root]`。设 `dx=d[x]`、`dy=d[y]`，若两点同根，则已知的差必须满足
+
+$$value[y]-value[x]=dy-dx.$$
+
+因此新约束 `value[y]-value[x]=w` 的矛盾判定就是检查 `dy-dx==w`。
+
+若把 `rootX` 接到 `rootY`，需要设置
+
+$$d[rootX]=value[rootX]-value[rootY]=dy-dx-w.$$
+
+若反过来把 `rootY` 接到 `rootX`，则
+
+$$d[rootY]=value[rootY]-value[rootX]=w+dx-dy.$$
+
+这两个式子是带权并查集最容易写反的地方。手算例子：先加入 `value[2]-value[1]=5`，再加入 `value[3]-value[2]=2`，得到 `value[3]-value[1]=7`；若最后要求差为 `6`，就应判定矛盾。
+
+**2. 变量在做什么**
+
+| 字段 | 含义 |
+|---|---|
+| `parent[i]` | 父结点；根的父亲是自身。下标 `1..n` 有效，`0` 是未使用哨兵。 |
+| `size[i]` | 仅根结点的集合大小，用于按大小合并。 |
+| `potential[i]` | `value[i]-value[parent[i]]`；经过 `find(i)` 后变为 `value[i]-value[root]`。 |
+
+根的 potential 为 0，只是选择参考原点，不代表题目中元素的绝对值。
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回 | 副作用与前提 |
+|---|---|---|
+| `WeightedDSU(n)` | `n>=0`；无返回值。 | 初始化编号 `1..n` 的单点集合。 |
+| `find(x)` | `x` 在 `1..n`；返回根编号。 | 私有函数；路径压缩并把 `potential[x]` 累加成到根差值。 |
+| `unite(x,y,w)` | `x,y` 在 `1..n`，`w` 表示 `value[y]-value[x]`；返回 `bool`。 | 异组时合并，同组时检验；可能路径压缩及改变结构。 |
+| `relation(x,y)` | `x,y` 在 `1..n`；返回 `optional<long long>`。 | 查询 `value[y]-value[x]`；不连通返回 `nullopt`，可能路径压缩。 |
+
+**4. 怎么调用**
+
+完整模板如下。代码中每个函数的参数、返回和副作用契约见其定义前注释。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+
+class WeightedDSU {
+    vector<int> parent, size;
+    // potential[x] = value[x] - value[parent[x]]；根的值为 0 只是参考原点。
+    vector<long long> potential;
+
+    // x 必须在 1..n；返回代表元，并把 potential[x] 改成 value[x]-value[root]。
+    int find(int x) {
+        if (parent[x] == x) return x;
+        int p = parent[x];
+        parent[x] = find(p);
+        potential[x] += potential[p];
+        return parent[x];
+    }
+
+public:
+    // n 为元素个数；建立 n 个互不连通的单点集合，初始差值均为 0。
+    explicit WeightedDSU(int n)
+        : parent(n + 1), size(n + 1, 1), potential(n + 1, 0) {
+        assert(n >= 0);
+        iota(parent.begin(), parent.end(), 0);
+    }
+
+    // x、y 在 1..n，w 表示 value[y]-value[x]=w；返回是否与现有约束相容。
+    // 若两点异组则合并；若同组则只检查约束。两种情况都会先 find，可能发生路径压缩，
+    // 但同组分割和已经成立的权值约束不会改变。
+    bool unite(int x, int y, long long w) {
+        int rx = find(x), ry = find(y);
+        long long dx = potential[x], dy = potential[y];
+        if (rx == ry) return dy - dx == w;
+        if (size[rx] > size[ry]) {
+            // value[ry]-value[rx] = w + dx - dy。
+            parent[ry] = rx;
+            potential[ry] = w + dx - dy;
+            size[rx] += size[ry];
+        } else {
+            // value[rx]-value[ry] = dy - dx - w。
+            parent[rx] = ry;
+            potential[rx] = dy - dx - w;
+            size[ry] += size[rx];
+        }
+        return true;
+    }
+
+    // x、y 在 1..n；find 可能压缩路径但不改变集合划分；返回 value[y]-value[x]，
+    // 不连通时返回 nullopt。
+    optional<long long> relation(int x, int y) {
+        if (find(x) != find(y)) return nullopt;
+        return potential[y] - potential[x];
+    }
+};
+```
+
+调用示例：
+
+```text
+WeightedDSU dsu(3);
+assert(dsu.unite(1, 2, 5));
+assert(dsu.unite(2, 3, 2));
+auto d = dsu.relation(1, 3);
+assert(d.has_value() && *d == 7);
+assert(!dsu.unite(1, 3, 6));
+```
+
+**5. 要改哪里**
+
+模 $3$ 关系时，统一规定 `potential[x]=norm(value[x]-value[parent[x]])`，其中 `norm(t)=((t%3)+3)%3`，所有差值归一化到 `{0,1,2}`；`find` 路径累加后取模，合并公式每次加减后也取模。题目若用“谁吃谁”等方向，先把语义写成 `value[y]-value[x]=w (mod 3)`，再将 `unite` 中的 `dy-dx` 与根挂接公式统一归一化，避免只改比较却没改存储。若要处理删除关系，不能在这个压缩并查集上直接删边，应改为可撤销并查集配合时间分治。
+
+模型识别：出现“相差多少”“时刻差”“坐标偏移”“同组内相对权值”时，先尝试令每条边表示 `value[v]-value[u]`。若只问连通性，用普通并查集即可；若约束会删除、撤销或需要时间分治，改用可撤销并查集等结构。
+
+**6. 自检**
+
+加入 `value[2]-value[1]=5`、`value[3]-value[2]=2` 后，查询 1 到 3 应为 7，反向应为 -7；再加入差值 6 应返回矛盾。未连通两点返回空值，同点差值为 0。
+
+**分层练习：** 入门：食物链或相对距离的三类关系；进阶：带时间戳的坐标约束与矛盾输出；提高：离线删除边、线段树分治和可撤销带权并查集。若关系是在模 $3$ 意义下的类别差，不能直接把本模板的整数加减照搬：`potential`、`w` 和每次加减都要改成模 $3$ 代表元，并按题目定义统一方向。
+
+**7. 坑**
+
+差值方向固定为 `value[y]-value[x]`；方向写反会使合并式和查询错。中间值也须避免溢出。
+
+组合应用：差值约束可先离散化元素，再由带权并查集维护；在线判矛盾可用于检查方程组的一致性；与二分答案结合时，每次二分检查一批差值约束。注意该模板不能处理“边删除”或要求路径上每条边的明细。
+
+**8. 一句话原理**
+
+沿父亲路径累加差值，使并查集同时维护连通性和组内相对值。
+
+## 5.21 离线树状数组 {#offline-fenwick}
+
+**1. 它是做什么的**
+
+查询可以等待输入全部读完，并且每次事件能按某个维度排序。典型任务是二维偏序 `x<=X 且 y<=Y`、区间查询不同数、逆序对。树状数组负责一个维度的前缀聚合，排序把另一个维度变成时间顺序。
+
+支持单点加与前缀和；用排序扫描回答二维计数，用“最后出现位置”回答区间不同数，用从右向左扫描计算逆序对。
+
+下方 `Fenwick` 的位置为 `1..n`，`sumPrefix(0)` 定义为 0。二维模板统计点（可重复）中满足 `px<=qx` 且 `py<=qy` 的个数；区间模板的每个查询为闭区间 `[l,r]`，答案按输入的 `id` 放回；逆序对统计 `i<j 且 a[i]>a[j]` 的对数。
+
+复杂度：树状数组操作为 $O(\log n)$。二维偏序包含 $y$ 坐标压缩、点和询问排序，时间为 $O((p+q)\log(p+q+1))$，空间 $O(p+q)$。区间不同数为 $O(n\log(n+1)+q\log(q+1)+q\log(n+1))$，分别对应最后出现位置维护、询问排序和查询；空间 $O(n+q)$。逆序对为 $O(n\log(n+1))$，空间 $O(n)$。
+
+### 为什么离线能降维
+
+二维查询看似要同时限制 `x`、`y`。把点和询问按 `x` 从小到大排序，处理询问 `(X,Y)` 时，所有 `px<=X` 的点已经加入树状数组；此时树状数组在 `y` 维的前缀和正好是答案。等值事件尤其重要：当前询问的 `X` 若允许点 `px=X`，就必须先加入这些点。下方代码用 `while (point.x <= query.x)` 明确实现“点先于同 `x` 查询”，避免把等号漏掉。
+
+区间不同数的另一种降维方法是固定右端点 `r` 扫描：值 `a[i]` 的贡献只保留它在 `[1,r]` 中最后一次出现的位置 `last[a[i]]`。每次读到新位置 `i`，先在旧位置减一、在 `i` 加一；查询 `[l,r]` 时，前缀和 `sum(r)-sum(l-1)` 恰好数出最后出现位置不小于 `l` 的值。
+
+例如 `a=[7,3,7]` 扫到 `r=1` 时 7 的最后位置是 1，扫到 `r=3` 时先删掉位置 1，再把 7 的贡献放到位置 3；此时查询 `[2,3]` 能数到 7 和 3 两种值。二维中若两次出现点 `(2,2)`，每个点都执行一次 `add`，所以询问 `(2,2)` 的答案会把它们都计入；这正是“点集合带重复”与“不同坐标点集合”两种题意的区别。
+
+**2. 变量在做什么**
+
+| 名称 | 含义 |
+|---|---|
+| `Fenwick::n/bit` | 有效位置上界 `n` 与树状数组；`bit` 下标从 1 开始。 |
+| `PointXY{x,y}` | 一个可重复计数的点坐标。 |
+| `QueryXY{x,y,id}` | 询问右上界及原输入编号；`id` 须为 `0..q-1`。 |
+| `RangeQuery{l,r,id}` | 1-based 闭区间及答案编号。 |
+| `ys`、`rankOf` | 合并点和询问的 y 坐标后离散化；Fenwick rank 为 1-based。 |
+| `last[value]` | 区间不同数扫描中，当前前缀内该值最后出现的位置。 |
+| `values`、`rank` | 逆序对压缩值域；相同值映射到同一 rank。 |
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回 | 副作用与前提 |
+|---|---|---|
+| `Fenwick(n)` | `n>=0`；构造空树状数组。 | 位置范围 `1..n`。 |
+| `add(pos,delta)` | `pos` 在 `1..n`；返回 `void`。 | 将单点增量加入内部树状数组。 |
+| `sumPrefix(pos)` | `pos` 在 `0..n`；返回 `long long`。 | 返回位置 `1..pos` 的和；不修改结构。 |
+| `rangeSum(l,r)` | 合法 1-based 闭区间；返回 `long long`。 | 返回区间和。 |
+| `countDominated(points,queries)` | 每个 query id 为 `0..q-1`；返回 `vector<long long>`。 | 返回满足 `px<=qx,py<=qy` 的点重数；不改 points。 |
+| `distinctInRanges(a,queries)` | `a` 为 1-based 且 `a[0]` 忽略；区间合法、id 连续；返回 `vector<int>`。 | 按输入 id 返回不同数个数。 |
+| `countInversions(a)` | 0-based `vector<long long>`；返回 `long long`。 | 统计严格逆序对 `i<j,a[i]>a[j]`，不改输入。 |
+
+**4. 怎么调用**
+
+完整模板如下。代码中每个函数的参数、返回和副作用契约见其定义前注释。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+
+struct Fenwick {
+    int n;
+    vector<ll> bit;
+
+    // n 为有效下标上界；建立全零树状数组。
+    explicit Fenwick(int n) : n(n), bit(n + 1, 0) { assert(n >= 0); }
+
+    // pos 必须在 1..n；把 bit[pos..] 对应的前缀结构都增加 delta。
+    void add(int pos, ll delta) {
+        assert(1 <= pos && pos <= n);
+        for (int i = pos; i <= n; i += i & -i) bit[i] += delta;
+    }
+
+    // pos 在 0..n；返回原数组下标 1..pos 的元素和。
+    ll sumPrefix(int pos) const {
+        assert(0 <= pos && pos <= n);
+        ll answer = 0;
+        for (int i = pos; i > 0; i -= i & -i) answer += bit[i];
+        return answer;
+    }
+
+    // l、r 为 1-based 合法闭区间；返回该区间和。
+    ll rangeSum(int l, int r) const { return sumPrefix(r) - sumPrefix(l - 1); }
+};
+
+struct PointXY { ll x, y; };
+struct QueryXY { ll x, y; int id; };
+
+// points 为二维点，queries 的 id 必须为 0..queries.size()-1；返回各询问的支配点数。
+vector<ll> countDominated(const vector<PointXY>& points, vector<QueryXY> queries) {
+    vector<ll> ys;
+    ys.reserve(points.size() + queries.size());
+    for (const auto& p : points) ys.push_back(p.y);
+    for (const auto& q : queries) ys.push_back(q.y);
+    sort(ys.begin(), ys.end());
+    ys.erase(unique(ys.begin(), ys.end()), ys.end());
+    // y 来自点或询问；返回离散化后 1-based 的位置，不修改 ys。
+    auto rankOf = [&](ll y) -> int {
+        return int(lower_bound(ys.begin(), ys.end(), y) - ys.begin()) + 1;
+    };
+    vector<PointXY> sortedPoints = points;
+    // 比较两个点的 x；相等时任意顺序均可，因为扫描只按 x 判断。
+    sort(sortedPoints.begin(), sortedPoints.end(),
+         [](const PointXY& a, const PointXY& b) { return a.x < b.x; });
+    // 比较两个询问的 x；相等时任意顺序均可，点会在 while 中全部加入。
+    sort(queries.begin(), queries.end(),
+         [](const QueryXY& a, const QueryXY& b) { return a.x < b.x; });
+    Fenwick fw((int)ys.size());
+    vector<ll> answer(queries.size());
+    size_t ptr = 0;
+    for (const auto& q : queries) {
+        // <= 保证 px==q.x 的点先进入；重复点会被重复计数。
+        while (ptr < sortedPoints.size() && sortedPoints[ptr].x <= q.x) {
+            fw.add(rankOf(sortedPoints[ptr].y), 1);
+            ++ptr;
+        }
+        int upto = int(upper_bound(ys.begin(), ys.end(), q.y) - ys.begin());
+        answer[q.id] = fw.sumPrefix(upto);
+    }
+    return answer;
+}
+
+struct RangeQuery { int l, r, id; };
+
+// a 为 1-based 数组（a[0] 忽略）；查询合法且 id 连续；返回每个闭区间的不同元素数。
+vector<int> distinctInRanges(const vector<int>& a, vector<RangeQuery> queries) {
+    int n = (int)a.size() - 1;
+    // 按右端点升序处理；右端点相等时按左端点升序只是稳定的次序选择。
+    sort(queries.begin(), queries.end(),
+         [](const RangeQuery& u, const RangeQuery& v) {
+             return u.r != v.r ? u.r < v.r : u.l < v.l;
+         });
+    Fenwick fw(n);
+    map<int, int> last; // 用 map 避免哈希碰撞；值的范围无需预先知道。
+    vector<int> answer(queries.size());
+    int right = 0;
+    for (const auto& q : queries) {
+        while (right < q.r) {
+            ++right;
+            auto it = last.find(a[right]);
+            if (it != last.end()) fw.add(it->second, -1);
+            fw.add(right, 1);
+            last[a[right]] = right;
+        }
+        answer[q.id] = (int)fw.rangeSum(q.l, q.r);
+    }
+    return answer;
+}
+
+// a 为 0-based 数组；返回所有 i<j 且 a[i]>a[j] 的对数。
+ll countInversions(const vector<ll>& a) {
+    vector<ll> values = a;
+    sort(values.begin(), values.end());
+    values.erase(unique(values.begin(), values.end()), values.end());
+    Fenwick fw((int)values.size());
+    ll answer = 0;
+    for (auto it = a.rbegin(); it != a.rend(); ++it) {
+        int rank = int(lower_bound(values.begin(), values.end(), *it) - values.begin()) + 1;
+        answer += fw.sumPrefix(rank - 1); // 已见元素中严格小于当前值，正好构成当前左端点的逆序对。
+        fw.add(rank, 1);
+    }
+    return answer;
+}
+```
+
+调用示例：
+
+```text
+vector<PointXY> points = {{2, 2}, {2, 2}, {3, 1}};
+auto dominated = countDominated(points, {{2, 2, 0}});
+assert(dominated[0] == 2);
+vector<int> a = {0, 7, 3, 7};
+auto distinct = distinctInRanges(a, {{2, 3, 0}});
+assert(distinct[0] == 2);
+auto inversions = countInversions({3, 1, 2});
+assert(inversions == 2);
+```
+
+**5. 要改哪里**
+
+三种常见边界改法：二维偏序若 x 条件是严格 `<`，把点加入条件 `point.x <= q.x` 改成 `<`；y 条件严格 `<` 时将 `upper_bound(y)` 改为 `lower_bound(y)`。区间不同数按右端点扫描时，先删值的旧最后位置，再在新位置加 1；不要改成“每个位置永久加 1”。逆序对要严格 `a[i]>a[j]`，所以反向扫描查询 `rank-1`；若统计 `>=`，查询前缀应包括当前 rank，但还需明确定义相等对是否计入。
+
+模型识别：全部询问已知、答案互不影响、一个维度能排序时优先考虑离线。看到“所有点左下方有多少点”想到二维偏序；看到“区间有多少种数”想到右端点排序和最后出现位置；看到“`i<j` 且大小关系”想到排序/离散化加树状数组。
+
+**6. 自检**
+
+例中重复点 `(2,2)` 应计两次；数组 `[7,3,7]` 的 `[2,3]` 区间有 2 个不同值；`[3,1,2]` 有 2 个严格逆序对。把所有值改成相等时，逆序对应为 0，任意非空区间的不同数为 1。
+
+**分层练习：** 入门：静态单点修改、区间和与逆序对；进阶：二维矩形左下计数、区间不同数；提高：三维偏序、带时间维度的修改查询和 CDQ 分治。要特别测试空询问列表、相同 `x/y` 的重复点、全相同数组和全逆序数组。
+
+**7. 坑**
+
+等号由扫描条件及 `lower_bound/upper_bound` 决定；重复点按重数计，查询 id 和闭区间范围须合法。
+
+组合应用：二维偏序还能扩展到 CDQ 分治、三维偏序和扫描线；区间不同数可与莫队比较取舍；逆序对可作为归并排序、Fenwick 或线段树的练习。值域很大时先坐标压缩，重复值必须保留相同 rank。
+
+**8. 一句话原理**
+
+排序把一个维度变成扫描进度，树状数组维护剩余维度的前缀统计。
+
+## 5.22 莫队算法 {#mo-algorithm}
+
+**1. 它是做什么的**
+
+数组静态不变，有很多离线区间询问，并且从区间 `[l,r]` 增删一个端点时，答案可以在较小代价内更新。例如区间不同数、区间内出现次数满足条件的值的个数、频率平方和。它要求所有询问可以一起读入并重排。
+
+把任意询问区间逐步移动为当前区间，通过四种操作 `addLeft`、`addRight`、`removeLeft`、`removeRight` 维护答案；下方模板回答区间不同数。
+
+数组 `a[1..n]` 在整个过程中不可修改；查询为合法闭区间 `[l,r]`，输入 `id` 为 `0..q-1`，答案按 `id` 返回。当前窗口初始为空 `[1,0]`，所以每一步都只调用合法的加入或删除。
+
+复杂度：设块长为 $B$。经典按块排序的端点移动上界为 $O(n^2/B+qB)$，每次移动 $O(1)$；排序询问另需 $O(q\log(q+1))$，值离散化预处理需 $O(n\log(n+1))$。取 $B\approx\sqrt n$ 时得到常见的 $O(n\sqrt n+q\sqrt n+q\log(q+1)+n\log(n+1))$ 表达式；空间 $O(n+q)$。这是移动次数上界，蛇形排序通常只改善常数。
+
+### 为什么重排询问有效
+
+如果按输入顺序回答，区间端点可能每次跨过 $n$ 个位置，最坏为 $O(nq)$。把 `l` 按块排序，再让同块内的 `r` 单调（奇偶块交替方向可减少来回），相邻区间只移动有限距离。算法的关键不是“记住一种排序”，而是确认四种单点增删都能维护目标信息。
+
+它不是动态数据结构：数组元素改变后，频率表通常失效。需要修改时应使用带修改莫队（增加时间维度）或其他结构。若答案无法从“加入一个元素/删除一个元素”快速更新，例如任意区间最短路，也不适合直接套莫队。
+
+**2. 变量在做什么**
+
+| 名称 | 含义 |
+|---|---|
+| `MoQuery{l,r,id}` | 1-based 闭区间及原查询编号；id 连续为 `0..q-1`。 |
+| `n` | `a.size()-1`，数组有效位置数。 |
+| `compressed[i]` | `a[i]` 的离散编号，编号从 0 开始。 |
+| `blockLength` | 左端点分块长度，至少为 1。 |
+| `frequency[v]` | 当前窗口中离散值 `v` 的出现次数。 |
+| `left/right` | 当前闭窗口端点；初始 `left=1,right=0` 表示空区间。 |
+| `distinct` | 当前窗口内频次非零的离散值个数。 |
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回 | 副作用与前提 |
+|---|---|---|
+| `MoDistinct(a)` | 1-based 静态数组，允许 `n=0`。 | 复制并压缩值，建立频次数组。 |
+| `addValue(value,distinct)` | 离散编号、计数器引用；返回 `void`。 | 增加该值频次；从 0 到 1 时增加 distinct。 |
+| `removeValue(value,distinct)` | 当前窗口内存在的离散编号、计数器引用；返回 `void`。 | 减少频次；从 1 到 0 时减少 distinct。 |
+| `solve(queries)` | 合法 1-based 闭区间、id 连续；返回 `vector<int>`。 | 仅重排参数副本、清频次并计算答案；原数组不变，可重复调用。 |
+
+**4. 怎么调用**
+
+完整模板如下。代码中每个函数的参数、返回和副作用契约见其定义前注释。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+
+struct MoQuery { int l, r, id; };
+
+class MoDistinct {
+    int n;
+    vector<int> compressed;
+    int blockLength;
+    vector<int> frequency;
+
+    // value 是已离散化的值编号；把它加入当前窗口并更新 distinct 的引用值。
+    void addValue(int value, int& distinct) {
+        if (frequency[value]++ == 0) ++distinct;
+    }
+
+    // value 是已离散化的值编号；它必须当前至少出现一次，再删除并更新 distinct。
+    void removeValue(int value, int& distinct) {
+        assert(frequency[value] > 0);
+        if (--frequency[value] == 0) --distinct;
+    }
+
+public:
+    // a 为 1-based 静态数组；压缩其值并建立计数表，后续 solve 不修改 a 的逻辑内容。
+    explicit MoDistinct(const vector<int>& a) : n((int)a.size() - 1) {
+        assert(n >= 0);
+        vector<int> values(a.begin() + (n ? 1 : 0), a.end());
+        sort(values.begin(), values.end());
+        values.erase(unique(values.begin(), values.end()), values.end());
+        compressed.assign(n + 1, 0);
+        for (int i = 1; i <= n; ++i)
+            compressed[i] = int(lower_bound(values.begin(), values.end(), a[i]) - values.begin());
+        frequency.assign(values.size(), 0);
+        blockLength = max(1, (int)sqrt(max(1, n)));
+    }
+
+    // queries 的 l、r 合法且 id 连续；返回各区间不同数，输入查询顺序不影响结果。
+    // 每次调用都会清空计数，因此可重复调用；数组本身必须保持静态。
+    vector<int> solve(vector<MoQuery> queries) {
+        for (int& x : frequency) x = 0;
+        // 先按左端点所在块，再按右端点蛇形排序；返回严格弱序比较结果。
+        sort(queries.begin(), queries.end(), [this](const MoQuery& a, const MoQuery& b) {
+            int ba = a.l / blockLength, bb = b.l / blockLength;
+            if (ba != bb) return ba < bb;
+            return (ba & 1) ? a.r > b.r : a.r < b.r;
+        });
+        vector<int> answer(queries.size());
+        int left = 1, right = 0, distinct = 0;
+        for (const MoQuery& q : queries) {
+            while (left > q.l) addValue(compressed[--left], distinct);
+            while (right < q.r) addValue(compressed[++right], distinct);
+            while (left < q.l) removeValue(compressed[left++], distinct);
+            while (right > q.r) removeValue(compressed[right--], distinct);
+            answer[q.id] = distinct;
+        }
+        return answer;
+    }
+};
+```
+
+调用示例：
+
+```text
+vector<int> a = {0, 1, 2, 1, 3};
+MoDistinct mo(a);
+auto answer = mo.solve({{1, 2, 0}, {2, 4, 1}});
+assert(answer[0] == 2 && answer[1] == 3);
+```
+
+**5. 要改哪里**
+
+把目标改成频次平方和时，维护 `sumSq=Σ_v freq[v]^2`。加入值 `v` 前令 `f=freq[v]`，更新 `sumSq += 2*f+1` 再令频次加一；删除前令 `f=freq[v]`，更新 `sumSq -= 2*f-1` 再减频次。每个端点增删仍为 $O(1)$，`solve` 的排序和移动逻辑不变。若只求最高频次，还需维护桶计数或其他能支持频次变化的结构，不能仅替换答案变量。
+
+模型识别：关键词包括“静态数组”“大量区间询问”“加入/删除一个值即可维护”。如果询问本身在线到达、必须立即输出，无法重排；如果有单点修改，先考虑带修改莫队、线段树或树状数组。
+
+**6. 自检**
+
+**手算小例子：** `a=[1,2,1,3]`，先处理 `[1,2]` 得到频次 `{1:1,2:1}`、答案 2；移动到 `[2,4]` 时删掉位置 1 的 1，再加入位置 3 的 1 和位置 4 的 3，频次 `{1:1,2:1,3:1}`，答案 3。每次只改一个端点，不重新扫描区间。
+
+**分层练习：** 入门：区间不同数；进阶：区间内众数频次、颜色出现次数；提高：带修改莫队、树上莫队和回滚莫队。
+
+**7. 坑**
+
+数组建好对象后保持不变；删除值必须确实在窗口内；查询 id、区间符合模板契约。
+
+组合应用：把 `frequency` 换成维护平方和、最大频次、满足频率条件的计数器，即可解决更多区间统计；树上莫队先用欧拉序和 LCA 把路径转为区间，并额外处理端点。与离线树状数组相比，莫队能处理“可增可删但难以单调扫描”的状态。
+
+**8. 一句话原理**
+
+排序询问后复用当前窗口状态，只为端点移动付出代价。
+
+## 5.23 笛卡尔树 {#cartesian-tree}
+
+**1. 它是做什么的**
+
+给定一个静态序列，需要把“原数组的顺序”和“区间最值的层次结构”同时表示。最小笛卡尔树满足：中序遍历正好得到原序列，且父节点值不大于子节点值；最大树则把“不大于”换成“不小于”。
+
+在线性时间建树，随后可用树上的 LCA 表示 RMQ（区间最小/最大值）；它也常用于单调栈、子数组贡献、区间最值分治。下方模板建立最小笛卡尔树，并规定重复最小值保留更靠左者为祖先。
+
+输入 `a[1..n]`，不能为空；返回根、左右孩子和父亲数组，编号仍为 `1..n`，不存在的孩子或父亲为 `0`。中序遍历返回 `1,2,...,n`，且每个父子边满足最小堆性质。
+
+复杂度：单调栈建树时间 $O(n)$、空间 $O(n)$。
+
+### 单调栈推导
+
+从左到右处理 `i`，栈中下标对应的值非递减（相等值不弹出，所以更左的相等值优先）。新值 `a[i]` 到来时，所有栈顶值大于它的节点都不可能再做这些节点右侧的祖先，连续弹出并记为 `last`。若栈仍非空，当前栈顶是 `i` 的左侧最近小于等于它的值，将它的右儿子设为 `i`；被弹出的整棵子树成为 `i` 的左儿子。最后栈底就是根。
+
+手算 `[3,1,4,2]`：读 3 得栈 `[1]`；读 1 弹出 1，栈空，故 1 为新根且左儿子为 3；读 4，设 1 的右儿子为 4；读 2 弹出 4，设 1 的右儿子为 2、2 的左儿子为 4。中序仍是 3,1,4,2，堆序也成立。
+
+**最小值贡献：** 对节点 `i`，设笛卡尔树左、右子树大小为 `L`、`R`。以 `i` 为最小值归属点的子数组必须从 `i` 的左子树中任选一段向左延伸（或不延伸），从右子树中任选一段向右延伸（或不延伸），因此贡献次数是 `(L+1)(R+1)`。相等值按“更左者优先”归属：相等节点在右侧链上，包含左侧相等节点的区间会归给更左节点，不会重复计数。若每个元素权值为 `a[i]`，所有子数组最小值之和即可写为 `sum(a[i]*(L+1)*(R+1))`；最大值贡献则建立最大笛卡尔树。
+
+**2. 变量在做什么**
+
+| 字段/局部量 | 含义 |
+|---|---|
+| `root` | 树根的原数组下标，范围 `1..n`。 |
+| `left[u]`,`right[u]` | 下标 `u` 的左右孩子；0 表示没有孩子。 |
+| `parent[u]` | 下标 `u` 的父亲；根和不存在的结点均为 0。 |
+| `stack` | 建树过程中的候选祖先下标；从底到顶对应值非递减。 |
+| `last` | 本轮最后弹出的下标，位于本轮弹出段的最底部，成为新节点的左子树根。 |
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回 | 副作用与前提 |
+|---|---|---|
+| `buildMinCartesian(a)` | 1-based 非空 `vector<long long>`；返回 `CartesianTree`。 | 不改输入；结果编号为 `1..n`，不存在的连接为 0。 |
+
+**4. 怎么调用**
+
+完整模板如下。代码中每个函数的参数、返回和副作用契约见其定义前注释。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+
+struct CartesianTree {
+    int root = 0;
+    vector<int> left, right, parent;
+};
+
+// a 为 1-based 非空数组；返回满足中序顺序和最小堆性质的笛卡尔树。
+// 相等值不弹栈，因此相等最小值中下标较小者为祖先。
+CartesianTree buildMinCartesian(const vector<ll>& a) {
+    int n = (int)a.size() - 1;
+    assert(n >= 1);
+    CartesianTree result;
+    result.left.assign(n + 1, 0);
+    result.right.assign(n + 1, 0);
+    result.parent.assign(n + 1, 0);
+    vector<int> stack;
+    for (int i = 1; i <= n; ++i) {
+        int last = 0;
+        while (!stack.empty() && a[stack.back()] > a[i]) {
+            last = stack.back();
+            stack.pop_back();
+        }
+        if (!stack.empty()) result.right[stack.back()] = i;
+        result.left[i] = last;
+        stack.push_back(i);
+    }
+    result.root = stack.front();
+    for (int u = 1; u <= n; ++u) {
+        if (result.left[u]) result.parent[result.left[u]] = u;
+        if (result.right[u]) result.parent[result.right[u]] = u;
+    }
+    return result;
+}
+```
+
+调用示例：
+
+```text
+vector<ll> a = {0, 3, 1, 4, 2};
+CartesianTree tree = buildMinCartesian(a);
+assert(tree.root == 2);
+assert(tree.left[2] == 1 && tree.right[2] == 4);
+// 对完整验证，另做中序遍历并核对结果为 1,2,3,4。
+```
+
+**5. 要改哪里**
+
+要让相等最小值中更靠右者优先，把弹栈比较从 `a[top] > a[i]` 改为 `a[top] >= a[i]`；这样等值旧节点被弹出，较右节点成为祖先。做“每个元素作为区间最小值”的贡献时，必须让左右边界的严格/非严格约束只在一侧处理相等，避免重复计数；当前树对应左侧相等优先。子数组最小值总和用 `a[i]*(L+1)*(R+1)` 累加，`L/R` 是左右子树大小，乘积和累加类型要足够宽。最大值版本换成最大笛卡尔树并同步调整比较符。
+
+模型识别：看到“区间最小值的分治结构”“中序必须保留原下标顺序”“所有子数组的最小值贡献”，想到笛卡尔树。静态 RMQ 也可以用稀疏表，动态修改通常改用线段树；笛卡尔树本身不支持原数组值的在线修改。
+
+**6. 自检**
+
+数组 `[3,1,4,2]` 的根为下标 2，左儿子为 1、右儿子为 4；中序遍历须恢复下标 `[1,2,3,4]`。全相等数组在严格 `>` 弹栈规则下形成向右的链，根为最左位置。
+
+**分层练习：** 入门：验证中序和堆性质；进阶：用笛卡尔树加 LCA 做静态 RMQ；提高：所有子数组最小值之和及重复最值的贡献分配。
+
+**7. 坑**
+
+比较条件决定相等值归属；本模板严格用 `>`，较左相等最小值优先；数组不可为空。
+
+组合应用：笛卡尔树的父子关系可让某些子数组贡献转为子树贡献；建树后给每个节点做 DFS 序，再用 LCA 回答 RMQ。大数组递归 DFS 可能爆栈，应改写为显式栈或使用安全的递归深度策略。
+
+**8. 一句话原理**
+
+单调栈把原序列中序次序和最值堆序编码为一棵树。
+
+## 5.24 李超线段树 {#li-chao-tree}
+
+**1. 它是做什么的**
+
+维护许多直线 `y=kx+b`，在线加入直线，并在一组已知横坐标上询问最大值。它适合“每次转移都是某条直线在当前 `x` 的值”的 DP 优化；直线可以任意交叉，插入后不能删除。
+
+支持插入整条直线和单点最大值查询；没有插入任何直线的查询返回空 `optional`。横坐标先压缩为实际会查询的坐标，因此不要求 `x` 连续，也能正确处理负数、重复坐标和空坐标集合。平行线会自然保留截距较大的那条。
+
+下方 `LiChaoMax` 构造时接收所有可能查询的 `x`，自动排序去重。`addLine(k,b)` 加入 `kx+b`；`query(x)` 要求 `x` 在构造时给出的坐标集合中，返回 `optional<__int128_t>`。比较和计算均使用 `__int128`，因为即使 `k`、`x`、`b` 各自能放入 `long long`，乘积 `k*x` 也可能溢出。
+
+复杂度：每次插入和查询 $O(\log m)$，其中 $m$ 是不同查询横坐标数；空间 $O(m)$。若要在任意整数区间在线询问，可将离散坐标树改为固定整数域的动态节点实现。
+
+### 为什么一个节点只需保留一条线
+
+节点代表一段已压缩横坐标。两条直线至多交一次：在区间中点比较后，较差的那条若在左端更优，就只可能继续在左半边胜出；若右端更优，就只递归右半边。每次比较后节点保存两条候选中在该区间中点更优的直线，另一条沿可能获胜的方向下传。因此不会遗漏任何查询点。
+
+DP 中常见的推导是
+
+$$dp[i]=\max_j(m_jx_i+b_j)$$
+
+或最小值版本。把关于 `j` 的部分整理为直线 `y=m_jx+b_j`，每计算一个 `dp[i]` 就查询 `x_i`；若之后的状态会使用 `dp[i]`，再把由 `dp[i]` 生成的直线插入。最小值可以把所有斜率和截距取负后调用最大值结构，再把答案取负。
+
+例如转移
+
+$$dp[i]=\max_j\{dp[j]+a[j]x_i+c[j]\}$$
+
+在计算 `i` 前，把每个已知状态 `j` 加入直线 `k=a[j]`、`b=dp[j]+c[j]`，然后 `dp[i]=query(x_i)`；若 `i` 也能成为后继，就在得到答案后再加入 `(a[i],dp[i]+c[i])`。这就是“先查后插”还是“先插后查”必须按转移下标严格确定的原因。最小值取反时要先在 `__int128` 中取负，不能对 `LLONG_MIN` 做 `-x`；同时本模板的 `Line::b` 是 `long long`，整理出的截距必须确实落在 `long long`，否则需要把直线参数也扩展为 `__int128`。
+
+**2. 变量在做什么**
+
+| 字段/局部量 | 含义 |
+|---|---|
+| `Line{k,b}` | 斜率与截距，均为 `long long`；代表 `y=kx+b`。 |
+| `xs` | 构造时坐标排序去重后的数组；只有这些坐标可查询。 |
+| `tree[node]` | 节点区间当前保留的直线。 |
+| `used[node]` | 是否已有直线；区分空树与有效直线。 |
+| `left/right/mid` | 当前离散下标区间及中点；不是原始 x 值。 |
+| `position` | 查询坐标在 `xs` 中的下标。 |
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回 | 副作用与前提 |
+|---|---|---|
+| `Line::value(x)` | `x` 为 `long long`；返回 `i128`。 | 精确计算 `k*x+b`。 |
+| `LiChaoMax(xs)` | 所有可能查询的坐标；返回对象。 | 排序去重，允许空坐标集合，初始化空树。 |
+| `insert(...)` | 私有节点、离散闭区间及直线；无返回值。 | 插入/交换节点代表线并向可能胜出的一侧递归。 |
+| `indexOf(x)` | x 必须属于 `xs`；返回 0-based 下标。 | 只查找，不修改。 |
+| `addLine(k,b)` | `long long` 斜率、截距；返回 `void`。 | 改变线段树；空坐标集合时忽略插入。 |
+| `query(x)` | x 必须属于 `xs`；返回 `optional<i128>`。 | 查询已插入直线最大值；无直线或坐标集合为空返回 `nullopt`。 |
+
+**4. 怎么调用**
+
+完整模板如下。代码中每个函数的参数、返回和副作用契约见其定义前注释。
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+using i128 = __int128_t;
+
+struct LiChaoMax {
+    struct Line {
+        ll k = 0, b = 0;
+        // x、k、b 可为 long long；返回 k*x+b 的精确 __int128 值。
+        i128 value(ll x) const { return (i128)k * x + b; }
+    };
+
+    vector<ll> xs;
+    vector<Line> tree;
+    vector<char> used;
+
+    // xs 可以为空；保存排序去重后的所有合法查询横坐标，并建立空节点树。
+    explicit LiChaoMax(vector<ll> xs) : xs(std::move(xs)) {
+        sort(this->xs.begin(), this->xs.end());
+        this->xs.erase(unique(this->xs.begin(), this->xs.end()), this->xs.end());
+        tree.assign(max(1, 4 * (int)this->xs.size()), Line{});
+        used.assign(tree.size(), false);
+    }
+
+private:
+    // node 代表离散下标 [left,right]；把 line 加入该节点及必要的子节点。
+    void insert(int node, int left, int right, Line line) {
+        if (!used[node]) {
+            tree[node] = line;
+            used[node] = true;
+            return;
+        }
+        int mid = (left + right) / 2;
+        if (line.value(xs[mid]) > tree[node].value(xs[mid]))
+            swap(line, tree[node]);
+        if (left == right) return;
+        // swap 后 tree[node] 在中点不劣，line 才是需要继续寻找胜点的候选。
+        bool lineBetterAtLeft = line.value(xs[left]) > tree[node].value(xs[left]);
+        bool lineBetterAtRight = line.value(xs[right]) > tree[node].value(xs[right]);
+        if (lineBetterAtLeft)
+            insert(node * 2, left, mid, line);
+        else if (lineBetterAtRight)
+            insert(node * 2 + 1, mid + 1, right, line);
+    }
+
+    // 返回 x 在 xs 中的下标；调用者必须保证 x 确实是构造时的坐标。
+    int indexOf(ll x) const {
+        auto it = lower_bound(xs.begin(), xs.end(), x);
+        assert(it != xs.end() && *it == x);
+        return int(it - xs.begin());
+    }
+
+    // 在离散下标 position 的根到叶路径上取已插入直线的最大值。
+    optional<i128> queryNode(int node, int left, int right, int position) const {
+        optional<i128> answer;
+        if (used[node]) answer = tree[node].value(xs[position]);
+        if (left == right) return answer;
+        int mid = (left + right) / 2;
+        optional<i128> child = position <= mid
+            ? queryNode(node * 2, left, mid, position)
+            : queryNode(node * 2 + 1, mid + 1, right, position);
+        if (!child) return answer;
+        if (!answer || *child > *answer) return child;
+        return answer;
+    }
+
+public:
+    // k、b 表示新直线 y=kx+b；空横坐标集合时忽略插入，其他情况修改树。
+    void addLine(ll k, ll b) {
+        if (!xs.empty()) insert(1, 0, (int)xs.size() - 1, Line{k, b});
+    }
+
+    // x 必须属于构造时坐标集合；返回所有已加入直线在 x 处的最大值，空集合返回 nullopt。
+    optional<i128> query(ll x) const {
+        if (xs.empty()) return nullopt;
+        return queryNode(1, 0, (int)xs.size() - 1, indexOf(x));
+    }
+};
+```
+
+调用示例：
+
+```text
+LiChaoMax lc({0, 2, 5});
+lc.addLine(1, 0);
+lc.addLine(-1, 4);
+auto best = lc.query(2);
+assert(best.has_value() && *best == 2);
+auto missing = lc.query(0);
+assert(missing.has_value() && *missing == 4);
+```
+
+**5. 要改哪里**
+
+最小值可把直线系数取反后用最大值树，再将查询结果取反；先转成 `i128` 再取负，避免 `LLONG_MIN` 溢出。当前 `Line::k,b` 仍是 `long long`，所以取反后的斜率、截距也必须能放回 `long long`；若题目系数超出该范围，需要把字段与 `addLine` 参数也改为 `i128`。插入阶段中点交换后，节点保存中点更优直线，剩下的候选线只沿端点仍更优的一侧递归；不要把分支判断套用到交换前的线。
+
+模型识别：DP 转移中若能整理成“枚举旧状态的斜率和截距，再代入当前 `x`”，并且只需单点查询，就考虑李超树。若斜率单调、查询横坐标单调，凸包优化可能更简单；若需要区间插入直线，可使用李超树的区间递归扩展。
+
+**6. 自检**
+
+**手算小例子：** 先加入 `y=x`，再加入 `y=-x+4`，查询 `x=0,2,5` 得到 `4,2,5`。两线在 `x=2` 相等，李超树在中点保留哪一条都不影响答案；若再加入平行线 `y=x+3`，它会在所有查询点压过 `y=x`，而无需特殊分支。
+
+**分层练习：** 入门：固定横坐标集合上的直线最大值；进阶：斜率优化 DP、平行线和负坐标；提高：区间加线、持久化李超树和动态坐标域。
+
+**7. 坑**
+
+查询 x 必须属于构造坐标；直线不能删除；参数为 long long，只有求值扩展到 __int128。
+
+组合应用：与坐标压缩结合处理离散 `x`；与前缀最优、斜率优化 DP 结合时按状态产生直线；将符号全部取反可把最大值模板用于最小值，但取反必须使用 `__int128` 避免 `LLONG_MIN` 溢出，且转换后的斜率、截距要满足模板的 `long long` 契约。若答案要打印，另写 `__int128` 转十进制函数，不能直接交给 `cout`。
+
+**8. 一句话原理**
+
+两条直线至多交一次，节点保留中点胜者并沿可能获胜的方向下传另一条线。
+
+## 5.25 差分 + GCD 线段树 {#difference-gcd-tree}
+
+**1. 它是做什么的**
+
+数组 `a[1..n]` 需要区间加法和区间 GCD 查询；操作在线给出，要求 `n,q` 较大。元素、差分、前缀和、`-x` 以及绝对值中间结果都必须能表示为 `long long`；特别地，不能出现 `LLONG_MIN`，因为它的绝对值无法表示。
+`rangeAdd(l,r,x)` 把闭区间每项加上 `x`；`rangeGcd(l,r)` 返回更新后 `gcd(|a[l]|,...,|a[r]|)`。
+构造器接收非空的 1-based 数组；区间必须满足 `1<=l<=r<=n`。GCD 取非负值，负数数组也可以输入。
+复杂度：建树 $O(n\log V)$，每次操作 $O(\log n\log V)$，空间 $O(n)$；`V` 是中间数值的上界，64 位整数上的欧几里得算法最多迭代常数次，竞赛中常把额外的 $\log V$ 视为常数。
+
+### 从朴素做法到两个可维护量
+
+若每次区间加都逐项修改，再逐项求 GCD，单次操作最坏是 $O(n)$。关键恒等式是
+
+$$
+\gcd(a_l,a_{l+1},\ldots,a_r)=\gcd(a_l,a_{l+1}-a_l,\ldots,a_r-a_{r-1}).
+$$
+
+记差分数组 `b[1]=a[1]`、`b[i]=a[i]-a[i-1]`。区间 `[l,r]` 加 `x` 只会改变两个差分点：`b[l]+=x`，以及存在时 `b[r+1]-=x`。所以用树状数组维护 `b` 的前缀和，就能在 $O(\log n)$ 得到 `a[l]`；用线段树维护 `|b[i]|` 的 GCD，就能在 $O(\log n)$ 查询 `b[l+1..r]` 的 GCD。查询答案是两者的 GCD。不能把一个节点的 GCD 直接加上 `x`：例如节点值为 `[6,10]` 时 GCD 是 `2`，整体加 `1` 后变成 `[7,11]`，新 GCD 是 `1` 而不是 `3`。差分只改边界，才把区间加转成了可维护的点加。
+
+例如 `a=[6,10,14,15]` 的差分是 `[6,4,4,1]`。给 `[2,3]` 加 `5` 后，只改成 `[6,9,4,-4]`，恢复出的数组是 `[6,15,19,15]`；查询 `[2,4]` 只需 `gcd(15,4,-4)=1`。实现中 `diff[pos] += delta` 和 `-x` 也要求不溢出；当 `x==LLONG_MIN` 时 `-x` 无法表示，`llabs(LLONG_MIN)` 同样未定义可表示结果，调用者必须排除这些输入。
+
+**2. 变量在做什么**
+
+| 字段 | 含义 |
+|---|---|
+| `n` | 原数组长度；所有公开区间是 1-based 闭区间。 |
+| `diff[i]` | 差分 `b[i]`，`b[1]=a[1]`，`b[i]=a[i]-a[i-1]`。 |
+| `bit` | Fenwick 树，维护 `diff` 的前缀和；`sumBit(i)` 还原 `a[i]`。 |
+| `seg` | GCD 线段树，叶子为 `|diff[i]|`，内部为儿子 GCD。 |
+| `p,l,r` | 递归树节点编号及其管理的闭区间；`pos` 是被改的差分下标。 |
+
+**3. 函数在做什么**
+
+| 函数 | 契约 |
+|---|---|
+| `DifferenceGcdTree(a)` | 要求 `a` 是非空 1-based `vector<ll>`；复制并初始化差分、BIT 与 GCD 树，不改输入。 |
+| `addBit(i,delta)` | `i∈[1,n]`；把差分点增量加到 BIT，返回 `void`。 |
+| `sumBit(i)` | `i∈[0,n]`；返回 `b[1..i]` 之和，i=0 返回 0。 |
+| `build(p,l,r)` | 初始化管理 `[l,r]` 的 GCD 摘要；递归辅助函数，仅应按本结构的节点区间约定调用。 |
+| `pointAdd(p,l,r,pos,delta)` | 改 `diff[pos]` 并重算祖先 GCD；位置必须在当前节点区间。 |
+| `query(p,l,r,ql,qr)` | 返回合法闭子区间差分绝对值的 GCD。 |
+| `rangeAdd(l,r,x)` | 合法闭区间加 x；修改 BIT 与 GCD 树，无返回值。要求所有中间值可表示且 `x!=LLONG_MIN`。 |
+| `rangeGcd(l,r)` | 返回当前闭区间非负 GCD；不修改结构。 |
+
+**4. 怎么调用**
+
+将本节模板放在业务代码之前，再按下面的输入调用。
+
+```text
+vector<long long> a = {0, 6, 10, 14, 15};
+DifferenceGcdTree st(a);
+st.rangeAdd(2, 3, 5);
+long long answer = st.rangeGcd(2, 4);
+assert(answer == 1);
+```
+
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+
+struct DifferenceGcdTree {
+    int n;
+    vector<ll> diff, bit, seg;
+
+    // a[1..n] 是非空 1-based 初值；复制差分并建立树状数组和 GCD 线段树，不修改 a。
+    explicit DifferenceGcdTree(const vector<ll>& a) : n((int)a.size() - 1), diff(n + 1, 0), bit(n + 1, 0), seg(4 * n + 4, 0) {
+        assert(n >= 1);
+        for (int i = 1; i <= n; ++i) diff[i] = a[i] - (i == 1 ? 0 : a[i - 1]);
+        for (int i = 1; i <= n; ++i) bit[i] += diff[i];
+        for (int i = 1; i <= n; ++i) if (i + (i & -i) <= n) bit[i + (i & -i)] += bit[i];
+        build(1, 1, n);
+    }
+
+    // i 为 1..n；delta 为差分点增量；返回 void，更新 bit[i..n] 的前缀和结构。
+    void addBit(int i, ll delta) {
+        for (; i <= n; i += i & -i) bit[i] += delta;
+    }
+
+    // i 为 0..n；返回差分 b[1..i] 的和，即原数组 a[i]（i=0 时返回 0）。
+    ll sumBit(int i) const {
+        ll result = 0;
+        for (; i > 0; i -= i & -i) result += bit[i];
+        return result;
+    }
+
+    // p 管理闭区间 [l,r]；按叶子的差分值建立 GCD 摘要；返回 void，只写 seg。
+    void build(int p, int l, int r) {
+        if (l == r) { seg[p] = llabs(diff[l]); return; }
+        int m = (l + r) / 2;
+        build(p * 2, l, m); build(p * 2 + 1, m + 1, r);
+        seg[p] = gcd(seg[p * 2], seg[p * 2 + 1]);
+    }
+
+    // p 管理 [l,r]，pos 是合法差分点，delta 是该点增量；返回 void，维护叶子及祖先 GCD。
+    void pointAdd(int p, int l, int r, int pos, ll delta) {
+        if (l == r) { diff[pos] += delta; seg[p] = llabs(diff[pos]); return; }
+        int m = (l + r) / 2;
+        if (pos <= m) pointAdd(p * 2, l, m, pos, delta);
+        else pointAdd(p * 2 + 1, m + 1, r, pos, delta);
+        seg[p] = gcd(seg[p * 2], seg[p * 2 + 1]);
+    }
+
+    // p 管理 [l,r]；返回区间差分的非负 GCD，ql..qr 必须是合法闭区间。
+    ll query(int p, int l, int r, int ql, int qr) const {
+        if (ql <= l && r <= qr) return seg[p];
+        int m = (l + r) / 2; ll result = 0;
+        if (ql <= m) result = gcd(result, query(p * 2, l, m, ql, qr));
+        if (qr > m) result = gcd(result, query(p * 2 + 1, m + 1, r, ql, qr));
+        return result;
+    }
+
+    // l,r 为 1-based 合法闭区间；x 为任意增量；返回 void，修改原数组的逻辑表示。
+    void rangeAdd(int l, int r, ll x) {
+        assert(1 <= l && l <= r && r <= n);
+        assert(x != LLONG_MIN);
+        addBit(l, x); pointAdd(1, 1, n, l, x);
+        if (r < n) { addBit(r + 1, -x); pointAdd(1, 1, n, r + 1, -x); }
+    }
+
+    // l,r 为 1-based 合法闭区间；返回当前 a[l..r] 的非负 GCD，不修改结构。
+    ll rangeGcd(int l, int r) const {
+        assert(1 <= l && l <= r && r <= n);
+        ll inside = (l == r ? 0 : query(1, 1, n, l + 1, r));
+        return gcd(sumBit(l), inside);
+    }
+};
+```
+
+**5. 要改哪里**
+
+- 若更新只发生在单点 `[l,l]`，仍须在存在时修改 `b[l+1]`，才能抵消对后续元素的影响；只有右端点等于 `n` 时跳过 `b[n+1]`。
+- 如果需要查询区间和，应另维护前缀和结构或换用懒标记线段树；GCD 摘要无法直接支持区间加。
+- 若改为区间赋值，差分会影响边界内的大量差分项，不能只调用两次 `pointAdd`。
+
+**6. 自检**
+
+原数组 `[6,10,14,15]` 经 `[2,3] += 5` 后为 `[6,15,19,15]`，故 `rangeGcd(2,4)==1`；`rangeGcd(3,3)==19`。`r=n` 的更新后查询不可触及 `n+1`。
+
+**7. 坑**
+
+- GCD 必须按非负绝对值计算；不能直接把有符号差分送给 `llabs` 并忽略 `LLONG_MIN`。
+- 更新 `[l,r]` 时忘记在 `r+1` 减去 x，会让区间右侧整体偏移。
+- 区间 GCD 由 `gcd(a[l], gcd(b[l+1..r]))` 得出，不能错误查询 `b[l..r]` 后再与 `a[l]` 合并。
+- `rangeAdd` 断言范围，不代表算术溢出会被检测；调用者仍须保证所有中间值安全。
+
+**8. 一句话原理**
+
+区间加只改变差分数组的两个端点，而区间 GCD 可由左端原值与内部差分的 GCD 合成。
+
+## 5.26 扫描线 + 线段树 {#sweep-line-segment-tree}
+
+**1. 它是做什么的**
+
+给出轴对齐矩形，计算它们的并面积；坐标可为负数，矩形边界为整数且总面积应能放入 `long long`。还要求每个 `x` 差、每个 `y` 覆盖跨度以及每次 `coveredY*(x-prevX)` 的乘积中间值都能放入 `long long`；否则应改用更宽整数。退化矩形（宽或高为零）不贡献面积。
+在线性事件数乘对数坐标数的时间内，维护当前竖直扫描线覆盖的 `y` 长度，并累积矩形并面积。
+矩形使用半开区域 `[x1,x2)×[y1,y2)`；返回并集面积。边界重合不重复计算，输入顺序不影响结果。
+复杂度：过滤后有 $m$ 个矩形、至多 $2m$ 个不同 `y` 坐标时，时间 $O(m\log m)$，空间 $O(m)$。
+
+### 为什么线段树维护“间隔”
+
+把所有竖边按 `x` 排序，从左向右移动扫描线。相邻事件的横宽是 `x-prevX`，这段宽度内当前被覆盖的纵向长度若是 `coveredY`，就贡献 `coveredY*(x-prevX)`。到达同一个 `x` 时，必须先累积旧状态的面积，再同时处理这个 `x` 的加入和移除事件。
+
+手算两个矩形 `A=[0,2)×[0,2)`、`B=[1,3)×[1,3)`：在 `x=0` 更新 A，当前覆盖长度为 2；到 `x=1` 先累积 `2*(1-0)=2`，再加入 B，此时覆盖 `[0,3)` 的长度为 3；到 `x=2` 先累积 `3*(2-1)=3`，再移除 A，覆盖 `[1,3)` 的长度为 2；到 `x=3` 累积 `2*(3-2)=2`。面积为 `2+3+2=7`。这个过程也说明同一横坐标必须先算旧覆盖再更新，否则会把 A 在 `x=1` 的边界错误地算进下一段。
+
+线段树的叶子不是某个坐标点，而是相邻坐标形成的半开间隔 `[ys[i],ys[i+1])`。节点记录 `coverCount`：若大于零，整个节点间隔都被覆盖；否则取两个儿子的覆盖长度。这样既不会把边界当成有面积的点，也能正确处理多个重叠矩形。
+
+**2. 变量在做什么**
+
+| 字段/变量 | 含义 |
+|---|---|
+| `Rectangle` | `x1,y1,x2,y2` 定义半开矩形 `[x1,x2)×[y1,y2)`。 |
+| `Event` | 扫描线事件 `(x,y1,y2,delta)`；左边 `+1`，右边 `-1`。 |
+| `ys` | 所有有效矩形的纵坐标去重排序；叶子对应相邻坐标间隔。 |
+| `cover[p]` | 节点区间被完整覆盖的矩形层数。 |
+| `length[p]` | 节点区间当前被覆盖的总 y 长度；根值是扫描线覆盖长度。 |
+| `area,previousX` | 已累计面积和上一批事件横坐标。 |
+
+**3. 函数在做什么**
+
+| 函数 | 契约 |
+|---|---|
+| `CoveredLengthTree(ys)` | `ys` 至少含两个严格递增坐标；初始化空覆盖结构。 |
+| `update(y1,y2,delta)` | y1/y2 必须是压缩坐标端点且 `y1<y2`；delta 为 +1 加覆盖或 -1 移除同一区间，修改树。 |
+| `covered()` | 返回当前所有活动区间覆盖的 y 长度。 |
+| `rectangleUnionArea(rectangles)` | 输入矩形向量；跳过退化矩形，返回并集面积；中间乘积及和须能装入 `ll`。 |
+
+**4. 怎么调用**
+
+将本节模板放在业务代码之前，再按下面的输入调用。
+
+```text
+vector<Rectangle> rectangles = {{0, 0, 2, 2}, {1, 1, 3, 3}};
+long long area = rectangleUnionArea(rectangles);
+assert(area == 7);
+```
+
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+
+struct Rectangle { ll x1, y1, x2, y2; };
+
+struct CoveredLengthTree {
+    vector<ll> y;
+    vector<int> cover;
+    vector<ll> length;
+
+    // ys 严格递增，叶子代表 ys[i] 到 ys[i+1] 的间隔；初始化空覆盖树。
+    explicit CoveredLengthTree(vector<ll> ys) : y(move(ys)), cover(4 * max(1, (int)y.size()) + 4, 0), length(cover.size(), 0) {
+        assert(y.size() >= 2);
+    }
+
+    // p 管理间隔下标 [l,r]；根据覆盖计数和儿子长度重算该节点覆盖长度。
+    void pull(int p, int l, int r) {
+        if (cover[p] > 0) length[p] = y[r + 1] - y[l];
+        else if (l == r) length[p] = 0;
+        else length[p] = length[p * 2] + length[p * 2 + 1];
+    }
+
+    // p 管理 [l,r]，ql..qr 是要加 delta 的合法间隔下标；返回 void，保持 length 正确。
+    void update(int p, int l, int r, int ql, int qr, int delta) {
+        if (ql <= l && r <= qr) { cover[p] += delta; pull(p, l, r); return; }
+        int m = (l + r) / 2;
+        if (ql <= m) update(p * 2, l, m, ql, qr, delta);
+        if (qr > m) update(p * 2 + 1, m + 1, r, ql, qr, delta);
+        pull(p, l, r);
+    }
+
+    // y1,y2 必须是构造时 ys 中的两个端点且 y1<y2；delta=+1 加入、-1 移除一个已加入的完全相同区间；返回 void，修改当前覆盖长度。
+    void update(ll y1, ll y2, int delta) {
+        auto leftIt = lower_bound(y.begin(), y.end(), y1);
+        auto rightIt = lower_bound(y.begin(), y.end(), y2);
+        assert(y1 < y2 && leftIt != y.end() && rightIt != y.end() && *leftIt == y1 && *rightIt == y2);
+        int l = leftIt - y.begin();
+        int r = rightIt - y.begin() - 1;
+        if (l <= r) update(1, 0, (int)y.size() - 2, l, r, delta);
+    }
+
+    // 无参数；返回当前所有活动区间覆盖的 y 长度，非负且不修改树。
+    ll covered() const { return length[1]; }
+};
+
+// rectangles 中每个矩形按半开区域解释；返回并集面积，跳过退化矩形。
+ll rectangleUnionArea(const vector<Rectangle>& rectangles) {
+    struct Event { ll x, y1, y2; int delta; };
+    vector<Event> events; vector<ll> ys;
+    for (const Rectangle& rec : rectangles) {
+        if (rec.x1 >= rec.x2 || rec.y1 >= rec.y2) continue;
+        events.push_back({rec.x1, rec.y1, rec.y2, +1});
+        events.push_back({rec.x2, rec.y1, rec.y2, -1});
+        ys.push_back(rec.y1); ys.push_back(rec.y2);
+    }
+    if (events.empty()) return 0;
+    sort(ys.begin(), ys.end()); ys.erase(unique(ys.begin(), ys.end()), ys.end());
+    // lambda 参数是两个事件，返回它们的 x 严格升序关系；同 x 的顺序不影响批量更新。
+    sort(events.begin(), events.end(), [](const Event& a, const Event& b) {
+        return a.x < b.x;
+    });
+    CoveredLengthTree tree(ys); ll area = 0, previousX = events.front().x;
+    size_t i = 0;
+    while (i < events.size()) {
+        ll x = events[i].x;
+        // 先用旧覆盖长度累积 [previousX,x)，再处理同 x 的所有事件。
+        area += tree.covered() * (x - previousX);
+        while (i < events.size() && events[i].x == x) {
+            tree.update(events[i].y1, events[i].y2, events[i].delta); ++i;
+        }
+        previousX = x;
+    }
+    return area;
+}
+```
+
+**5. 要改哪里**
+
+- 若要计算矩形并周长，单靠根覆盖长度不够，还需维护覆盖段数及左右端覆盖状态，且同一 x 的加入/删除要按周长规则处理。
+- 要求输出覆盖次数至少 k 的长度时，把节点摘要从 `cover>0` 的长度扩展为覆盖层数分布。
+- 坐标或面积可能超出 `long long` 时，统一将差、乘积、面积改为更宽类型；只改最终返回类型不够。
+
+**6. 自检**
+
+矩形 `[0,2)×[0,2)` 与 `[1,3)×[1,3)` 的并面积为 7；单个矩形面积为宽乘高；空输入和全部退化矩形返回 0。
+
+**7. 坑**
+
+- 叶子代表坐标间隔 `[ys[i],ys[i+1])`，不是坐标点；更新右端点映射到 `index(y2)-1`。
+- 面积必须用到达 x 前的覆盖长度乘 `x-previousX`，再处理该 x 的事件。
+- 同 x 的事件顺序不影响面积，但不得把边界本身计为正面积。
+- 面积乘积可能先溢出再累加；返回类型足够不等于中间乘法安全。
+
+**8. 一句话原理**
+
+按 x 切片累加面积，并在线段树上维护当前被矩形覆盖的 y 间隔总长度。
+
+## 5.27 线段树 + 矩阵乘法 {#matrix-segment-tree}
+
+**1. 它是做什么的**
+
+一串按顺序执行的线性状态转移需要单点修改和区间复合，例如字符 DP、自动机转移或路径计数。矩阵维数 `k` 固定且较小，运算在模数 `MOD` 下进行。
+把位置 `i` 的转移矩阵存在线段树叶子，区间查询返回按从左到右顺序复合的总转移；`pointSet` 修改一处转移。
+矩阵均为 `k×k`；向量视为列向量，区间 `[l,r]` 的结果是 `M_r⋯M_l`。本节复用 5.15 节的 `PointSegmentTree<T,Merge>`，需先合并该节代码；它要求合并器满足结合律。
+复杂度：一次矩阵乘法 $O(k^3)$；建树 $O(nk^3)$，单点修改与区间查询 $O(k^3\log n)$，空间 $O(nk^2)$。若只把一个向量依次应用区间内的矩阵，朴素代价是 $O((r-l+1)k^2)$；若要显式算出整个区间总矩阵，朴素代价才是 $O((r-l+1)k^3)$。
+
+最直接地把一个状态向量逐个应用区间内的矩阵只需 $O((r-l+1)k^2)$，但无法复用多次查询；若需要区间总矩阵，逐个合并是 $O((r-l+1)k^3)$。矩阵乘法满足结合律，因此可以把连续转移压成线段树节点摘要。合并顺序不能写反：左区间先作用，右区间后作用，所以 `merge(left,right)=right*left`。单位矩阵是双侧单位元。
+
+例如状态 `(末位是 0 的方案数, 末位是 1 的方案数)` 在读入一个字符后由一个 `2×2` 矩阵转移；查询 `[l,r]` 得到 `M_r⋯M_l` 后，只需一次矩阵乘列向量。字符规则改变时调用 `tree.pointSet(pos, normalizedMatrix(updated))`，之后用 `tree.rangeQuery(l,r)` 查询新总转移，不必重建整棵树。
+
+**2. 变量在做什么**
+
+| 字段/变量 | 含义 |
+|---|---|
+| `Matrix::n`、`Matrix::a` | 方阵维数及元素；代码要求维数为正，归一化值位于 `[0,MATRIX_MOD)`。 |
+| `identityMatrix(n)` | 线段树空区间的双侧单位元。 |
+| `MatrixCompose` | 组合器；`operator()(left,right)` 返回 `right*left`，表示先执行左段再执行右段。 |
+| `PointSegmentTree` | 来自 5.15 的通用线段树，存矩阵摘要并提供 `pointSet/rangeQuery`。 |
+| `initial` | 1-based 初始转移矩阵数组；位置 0 不参与。 |
+
+**3. 函数在做什么**
+
+| 函数/操作 | 契约 |
+|---|---|
+| `identityMatrix(n)` | `n>0`；返回 n 阶单位矩阵。 |
+| `normalizedMatrix(matrix)` | 正维矩阵按模数归一化后返回副本，不改实参。 |
+| `multiplyMatrix(left,right)` | 同阶正维且元素已归一化；返回 `left*right`。 |
+| `MatrixCompose::operator()(left,right)` | 同阶矩阵；返回 `right*left`，用于从左到右应用转移。 |
+| `matrixRange(initial,l,r)` | 依赖 5.15 的 `PointSegmentTree`；返回区间总转移 `M_r…M_l`。 |
+| `replaceAndQuery(tree,pos,updated,l,r)` | 替换 pos 处矩阵并返回新区间总转移；索引及矩阵阶数合法。 |
+| `pointSet/rangeQuery` | 通用线段树接口：点赋值、查询闭区间摘要；操作复杂度按 5.15 契约。 |
+
+**4. 怎么调用**
+
+将本节模板放在业务代码之前，再按下面的输入调用。
+
+```text
+Matrix a(2), b(2);
+a.a = {{1, 1}, {0, 1}};
+b.a = {{1, 0}, {1, 1}};
+vector<Matrix> initial = {Matrix(2), a, b};
+MatrixSegmentTree tree(initial, identityMatrix(2), MatrixCompose{});
+Matrix product = tree.rangeQuery(1, 2); // b*a
+assert((product.a == vector<vector<ll>>{{1, 1}, {1, 2}}));
+tree.pointSet(2, identityMatrix(2));
+assert(tree.rangeQuery(1, 2).a == a.a);
+```
+
+
+```cpp
+// 依赖：先放入 5.15 节的 PointSegmentTree<T, Merge> 定义。
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+constexpr ll MATRIX_MOD = 1000000007;
+
+struct Matrix {
+    int n;
+    vector<vector<ll>> a;
+    // n 为正维数时返回 n*n 零矩阵；n=0 仅可作为未初始化占位，不能传给矩阵乘法或线段树。
+    explicit Matrix(int n = 0) : n(n), a(n, vector<ll>(n, 0)) {}
+};
+
+// n 为正维数；返回 n*n 单位矩阵，作为 PointSegmentTree 的双侧单位元。
+Matrix identityMatrix(int n) {
+    assert(n > 0);
+    Matrix result(n);
+    for (int i = 0; i < n; ++i) result.a[i][i] = 1;
+    return result;
+}
+
+// matrix 维数为正；返回每个元素归一化到 [0,MATRIX_MOD) 的副本，不改变入参。
+Matrix normalizedMatrix(Matrix matrix) {
+    assert(matrix.n > 0);
+    for (auto& row : matrix.a) for (ll& value : row) {
+        value %= MATRIX_MOD;
+        if (value < 0) value += MATRIX_MOD;
+    }
+    return matrix;
+}
+
+// left/right 为同维数且元素已在 [0,MATRIX_MOD) 的矩阵；返回 left*right，参数不被修改。
+Matrix multiplyMatrix(const Matrix& left, const Matrix& right) {
+    assert(left.n == right.n && left.n > 0);
+    Matrix result(left.n);
+    for (int i = 0; i < left.n; ++i)
+        for (int k = 0; k < left.n; ++k) if (left.a[i][k])
+            for (int j = 0; j < left.n; ++j)
+                result.a[i][j] = (result.a[i][j] + left.a[i][k] * right.a[k][j]) % MATRIX_MOD;
+    return result;
+}
+
+struct MatrixCompose {
+    // left/right 同维；返回先作用 left、再作用 right 的列向量转移 right*left。
+    Matrix operator()(const Matrix& left, const Matrix& right) const {
+        return multiplyMatrix(right, left);
+    }
+};
+
+// 有序复合树的类型别名，本身不做归一化；构造时 initial[1..n] 必须同维且元素已在模范围内。
+using MatrixSegmentTree = PointSegmentTree<Matrix, MatrixCompose>;
+
+// initial[1..n] 为同维数转移矩阵；返回 M_r...M_l 作用于初始列向量的矩阵摘要。
+Matrix matrixRange(const vector<Matrix>& initial, int l, int r) {
+    assert(l >= 1 && l <= r && r < (int)initial.size());
+    vector<Matrix> normalized(initial.size());
+    for (int i = 1; i < (int)initial.size(); ++i) normalized[i] = normalizedMatrix(initial[i]);
+    MatrixSegmentTree tree(normalized, identityMatrix(normalized[1].n), MatrixCompose{});
+    return tree.rangeQuery(l, r);
+}
+
+// tree 已用同维数归一化矩阵构造；pos、l、r 合法；替换 pos 后返回新区间 [l,r] 的总转移。
+Matrix replaceAndQuery(MatrixSegmentTree& tree, int pos, Matrix updated, int l, int r) {
+    tree.pointSet(pos, normalizedMatrix(move(updated)));
+    return tree.rangeQuery(l, r);
+}
+```
+
+**5. 要改哪里**
+
+- 若区间转移次序相反，应同步改 `MatrixCompose` 的乘法顺序，并用两个不交换矩阵验证。
+- 若更新字符或状态，替换对应叶矩阵后查询受影响区间；不必重建整个树。
+- 若改模数，更新 `MATRIX_MOD` 并确认乘法中间值仍不溢出；当前 `long long` 乘积要求模数范围受控。
+
+**6. 自检**
+
+用两个不交换矩阵 `A,B` 检查区间 `[1,2]` 结果是 `B*A`，不是 `A*B`；单元素区间应返回该叶矩阵，替换一个叶后其余区间查询不变。
+
+**7. 坑**
+
+- 矩阵乘法通常不交换；本代码有意组合为 `right*left`，不可随手交换。
+- `PointSegmentTree` 是 5.15 的依赖，单独编译此片段前需合并依赖定义。
+- 传入矩阵维数必须一致且元素先归一化；构造时 `initial[1]` 必须存在。
+- 模乘中间乘积需能容纳 `MATRIX_MOD` 下两个元素的乘积。
+
+**8. 一句话原理**
+
+矩阵乘法满足结合律，因此可将一段连续状态转移按顺序合并成线段树摘要。
+
+## 5.28 线段树上二分 {#segment-tree-search}
+
+**1. 它是做什么的**
+
+维护可单点修改的数组，并寻找区间中第一个满足某个可剪枝条件的位置。本模板针对“值至少为阈值”，即节点摘要为区间最大值。
+`firstAtLeast(l,r,x)` 返回 `[l,r]` 中最小的 `i` 使 `a[i]>=x`，不存在时返回 `-1`；支持 `pointSet`。
+初始数组为 1-based 非空数组；区间合法闭区间；返回位置编号或失败哨兵 `-1`。
+复杂度：建树 $O(n)$，单点修改 $O(\log n)$，一次寻找 $O(\log n)$（沿少量被截断的节点下降），空间 $O(n)$。
+
+朴素逐项扫描是 $O(n)$。线段树节点保存最大值：若节点完全落在查询区间且最大值小于 `x`，整段都不可能成为答案，可以直接剪枝；否则优先递归左儿子，就能保证返回最左位置。这个方法不是“对下标做普通二分”，因为数组本身不要求有序，二分依赖的是可合并的节点摘要。
+
+手算 `a=[2,-4,7,1,7]`、查询 `[2,5]` 中第一个 `>=7` 的位置：根节点覆盖 `[1,5]` 的最大值足够，但左侧 `[1,3]` 与查询相交，继续看其右端 `[3,3]`，得到位置 `3`；如果查询改为 `[4,5]`，左侧交集 `[4,4]` 的最大值 `1` 不够，才转到 `[5,5]` 返回 `5`。因此数组不需要有序，树上的“整段不可能”摘要才是二分依据。
+
+**2. 变量在做什么**
+
+| 字段/变量 | 含义 |
+|---|---|
+| `n` | 初始 1-based 数组长度。 |
+| `tree[p]` | 节点管理区间的最大值；若小于 `need`，该段不可能有答案。 |
+| `initial` | 构造时传入的 1-based 初值，复制到树中。 |
+| `ql,qr,need` | 搜索区间闭端点和目标下界。 |
+| `pos,value` | `pointSet` 的 1-based 修改位置和值。 |
+
+**3. 函数在做什么**
+
+| 函数 | 契约 |
+|---|---|
+| `FirstAtLeastTree(initial)` | 非空 1-based 初值；建立区间最大值树，不改输入。 |
+| `pointSet(pos,value)` | `pos∈[1,n]`；将该点赋为 value，更新祖先最大值，无返回值。 |
+| `firstAtLeast(l,r,need)` | 合法 1-based 闭区间；返回最小的满足 `a[i]>=need` 的位置，无解返回 -1。 |
+| `search(p,l,r,ql,qr,need)` | 递归剪枝并优先搜索左儿子；仅供公开查询使用。 |
+
+**4. 怎么调用**
+
+将本节模板放在业务代码之前，再按下面的输入调用。
+
+```text
+vector<long long> initial = {0, 1, 2, 3, 4, 5};
+FirstAtLeastTree tree(initial);
+tree.pointSet(3, 8);
+int pos = tree.firstAtLeast(2, 5, 7);
+assert(pos == 3);
+```
+
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+
+struct FirstAtLeastTree {
+    int n;
+    vector<ll> tree;
+
+    // initial[1..n] 为非空 1-based 数组；复制并建立区间最大值树，不修改入参。
+    explicit FirstAtLeastTree(const vector<ll>& initial) : n((int)initial.size() - 1), tree(4 * n + 4, LLONG_MIN) {
+        assert(n >= 1); build(1, 1, n, initial);
+    }
+
+    // p 管理 [l,r]；按 initial 建立最大值摘要；返回 void，仅写 tree。
+    void build(int p, int l, int r, const vector<ll>& initial) {
+        if (l == r) { tree[p] = initial[l]; return; }
+        int m = (l + r) / 2;
+        build(p * 2, l, m, initial); build(p * 2 + 1, m + 1, r, initial);
+        tree[p] = max(tree[p * 2], tree[p * 2 + 1]);
+    }
+
+    // pos 为 1..n；value 为替换值；返回 void，更新叶子和祖先最大值。
+    void pointSet(int p, int l, int r, int pos, ll value) {
+        if (l == r) { tree[p] = value; return; }
+        int m = (l + r) / 2;
+        if (pos <= m) pointSet(p * 2, l, m, pos, value);
+        else pointSet(p * 2 + 1, m + 1, r, pos, value);
+        tree[p] = max(tree[p * 2], tree[p * 2 + 1]);
+    }
+
+    // p 管理 [l,r]；在交集内寻找最左 >= need 的位置；不存在时返回 -1。
+    int search(int p, int l, int r, int ql, int qr, ll need) const {
+        if (r < ql || qr < l || tree[p] < need) return -1;
+        if (l == r) return l;
+        int m = (l + r) / 2;
+        int left = search(p * 2, l, m, ql, qr, need);
+        return left != -1 ? left : search(p * 2 + 1, m + 1, r, ql, qr, need);
+    }
+
+    // pos/value 合法；返回 void，完成单点替换。
+    void pointSet(int pos, ll value) { assert(1 <= pos && pos <= n); pointSet(1, 1, n, pos, value); }
+
+    // l,r 合法闭区间；返回区间内最小的满足 a[i]>=need 的位置，不存在返回 -1。
+    int firstAtLeast(int l, int r, ll need) const {
+        assert(1 <= l && l <= r && r <= n);
+        return search(1, 1, n, l, r, need);
+    }
+};
+```
+
+**5. 要改哪里**
+
+- 若查“最后一个满足条件的位置”，改为先搜右儿子再搜左儿子。
+- 若摘要为最小值，寻找首个 `a[i]<=x` 时将剪枝条件改为区间最小值仍大于 x。
+- 若用区间和找首个前缀达到阈值，必须保证元素非负；有负数时前缀不单调，不能安全剪枝。
+
+**6. 自检**
+
+初值 `{0,2,7,4,9,1}` 查询 `[2,5]`、need=7 应返回 3；改位置 3 为 0 后应返回 5；need=10 无解返回 -1。
+
+**7. 坑**
+
+- 搜索必须先检查当前节点最大值是否小于 need；不满足时下探会失去剪枝收益。
+- 先搜左子树才能保证返回最小下标。
+- `tree` 以 `LLONG_MIN` 初始化，构造器要求非空数组。
+- 区间求和只有在非负元素保证前缀单调时才能做同类搜索。
+
+**8. 一句话原理**
+
+若一个节点的区间最大值仍小于阈值，节点内所有位置都不可能满足条件，可以整段跳过。
+
+## 5.29 倍增 + 单调栈 {#doubling-monotone-stack}
+
+**1. 它是做什么的**
+
+静态数组上反复询问“从位置 `i` 开始沿下一个更大元素跳 `k` 次”。本节使用严格更大关系 `a[next]>a[i]`；数组不修改。
+预处理每个位置的 next greater element，再用倍增在 $O(\log k)$ 内回答第 `k` 个更大元素位置。
+数组 1-based；不存在的跳转为 `0`，起点越界或 `k<=0` 返回 `0`；`firstGreaterWithin` 的右界须由调用方保证不超过 `n`。`k` 用 `long long` 表示。
+复杂度：单调栈预处理 $O(n)$，倍增表 $O(n\log n)$，每次查询 $O(\log k)$，空间 $O(n\log n)$。
+
+对每个位置向右扫描并寻找第一个更大值，单次可能 $O(n)$。从右往左维护一个单调递减候选栈：小于等于当前值的候选永远不会成为当前点或更左点的 next greater，直接弹出。得到 `up[0][i]` 后，`up[j][i]=up[j-1][up[j-1][i]]`，二进制拆分 `k` 即可跳跃。这里的 `kthGreater(i,k)` 是后继链上的第 `k` 次跳转，不是区间第 `k` 大；若只问 `[i+1,r]` 内第一个严格大于 `a[i]` 的位置，只需取 `up[0][i]` 并检查它是否不超过 `r`。若阈值是独立给出的 `x`，则应另维护区间最大值树：从左到右剪枝最大值小于 `x` 的节点，定位 `[l,r]` 中第一个 `a[j]>=x`，这正是 5.28 的组合。
+
+**2. 变量在做什么**
+
+| 字段/变量 | 含义 |
+|---|---|
+| `n` | 1-based 数组长度。 |
+| `log` | 倍增层数，表下标为 `0..log-1`；链上最多有 `n-1` 次有效跳转。 |
+| `up[j][i]` | 从 i 沿 next-greater 链跳 `2^j` 次的位置；0 表示链已断。 |
+| `mono` | 从右往左扫描时的单调栈，保存可能成为 next greater 的下标。 |
+| `start,k,right` | 起点、正跳数和查询右边界；`k` 为 `long long`。 |
+
+**3. 函数在做什么**
+
+| 函数 | 契约 |
+|---|---|
+| `NextGreaterDoubling(a)` | 非空 1-based 静态数组；构造严格更大后继和倍增表，不改输入。 |
+| `kthGreater(start,k)` | start 合法、k 为正；返回后继链第 k 次跳转位置；非法起点或不存在返回 0。 |
+| `firstGreaterWithin(start,right)` | 返回 `[start+1,right]` 内首个严格大于 `a[start]` 的位置；不存在返回 0。 |
+
+**4. 怎么调用**
+
+将本节模板放在业务代码之前，再按下面的输入调用。
+
+```text
+vector<long long> a = {0, 2, 1, 4, 3, 5};
+NextGreaterDoubling jumps(a);
+int first = jumps.firstGreaterWithin(1, 4);
+int second = jumps.kthGreater(1, 2);
+assert(first == 3 && second == 5);
+```
+
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+
+struct NextGreaterDoubling {
+    int n, log;
+    vector<vector<int>> up;
+
+    // a[1..n] 为静态非空数组；建立严格更大元素的 next 指针和倍增表，不修改 a。
+    explicit NextGreaterDoubling(const vector<ll>& a) : n((int)a.size() - 1), log(1) {
+        assert(n >= 1);
+        while ((1LL << log) <= n) ++log;
+        up.assign(log, vector<int>(n + 1, 0));
+        vector<int> mono;
+        for (int i = n; i >= 1; --i) {
+            while (!mono.empty() && a[mono.back()] <= a[i]) mono.pop_back();
+            up[0][i] = mono.empty() ? 0 : mono.back();
+            mono.push_back(i);
+        }
+        for (int j = 1; j < log; ++j)
+            for (int i = 1; i <= n; ++i)
+                up[j][i] = up[j - 1][up[j - 1][i]];
+    }
+
+    // start 为 1..n，k 为正跳数；返回第 k 个严格更大元素的位置，不存在返回 0。
+    int kthGreater(int start, ll k) const {
+        if (start < 1 || start > n || k <= 0) return 0;
+        int node = start;
+        for (int bit = 0; k > 0 && node != 0; ++bit, k >>= 1)
+            if (k & 1) node = bit < log ? up[bit][node] : 0;
+        return node;
+    }
+
+    // start 为 1..n，right 为不小于 start 的右边界；返回 [start+1,right] 内第一个 >a[start] 的位置，否则返回 0。
+    int firstGreaterWithin(int start, int right) const {
+        if (start < 1 || start > n || right <= start) return 0;
+        int next = up[0][start];
+        return next != 0 && next <= right ? next : 0;
+    }
+};
+```
+
+**5. 要改哪里**
+
+- 要求“下一个大于等于”时，构栈弹出条件需从 `<=` 改为 `<`，并验证重复值链。
+- 若只需单次 next greater 查询，不必建倍增表，单调栈的 `up[0]` 已足够。
+- 若问独立阈值 x 在 `[l,r]` 的首个满足位置，本节按跳数查询的接口不能直接回答；可使用 5.28 的区间最大值剪枝，或另设计按值判断的后继链倍增查询。
+
+**6. 自检**
+
+数组 `{0,2,1,4,3,5}` 中 `firstGreaterWithin(1,4)==3`，`kthGreater(1,2)==5`；严格关系下从值 4 不会跳到相等值 4。
+
+**7. 坑**
+
+- 严格更大使用弹栈条件 `<=`；改成 `<` 后语义会包含相等值。
+- `up[0][i]` 是下一个更大位置，不是更大值；哨兵 0 不能当数组下标访问。
+- `kthGreater` 沿后继链跳 k 次，不等同于区间第 k 大。
+- `firstGreaterWithin` 的 `right` 必须是有效数组边界。
+
+**8. 一句话原理**
+
+单调栈找出每个位置的一步更大后继，倍增表将后继链上的多步跳跃拆成二进制块。
+
+## 5.30 可撤销并查集 {#rollback-dsu}
+
+**1. 它是做什么的**
+
+需要在一条递归或离线时间线中反复“临时合并、回到某个历史时刻”的无向连通性问题。只支持合并与回滚，不支持路径压缩。
+`unite(u,v)` 合并两个集合，`snapshot()` 记下当前时间点，`rollback(s)` 恢复到快照时的分量数和父子关系；重复边若两端已连通会被记录为无效操作，从而仍可按操作次数回滚。
+点编号为 `1..n`；快照是内部修改记录栈的大小，必须来自当前对象且按后进先出回滚。`same` 查询不改变状态。
+复杂度：按大小合并后 `find` 和一次成功 `unite` 为 $O(\log n)$，`snapshot` 为 $O(1)$；`rollback(s)` 的时间是实际弹出的记录数，每条记录恢复为 $O(1)$，不能把整次回滚都写成 $O(\log n)$。空间 $O(n+q)$（每次尝试合并最多一条记录）。
+
+普通并查集的路径压缩会改动很多父指针，回滚时必须保存这些变化，代价和实现复杂度都会变高。因此这里明确禁止路径压缩，只按集合大小挂接根；一次 `unite` 最多改变一个根和一个集合大小。快照就是“修改栈的长度”，回滚弹出记录并反向恢复。
+
+**2. 变量在做什么**
+
+| 字段 | 含义 |
+|---|---|
+| `parent[x]` | 并查集父指针；根满足 `parent[x]==x`。 |
+| `size[root]` | 根所代表集合的大小，只对根有意义。 |
+| `history` | 每次 `unite` 一条记录；成功记录旧根大小，失败记录 `merged=false`。 |
+| `components` | 当前连通分量数。 |
+| `Change` | `child`、被挂接的 `parentRoot`、合并前 `oldSize` 及是否成功。 |
+
+**3. 函数在做什么**
+
+| 函数 | 契约 |
+|---|---|
+| `RollbackDSU(n)` | n>=1；初始化 1..n 为单点集合。 |
+| `find(x)` | 合法点；返回根，不压缩路径、不修改状态。 |
+| `snapshot()` | 返回当前 history 长度，作为不透明快照。 |
+| `unite(u,v)` | 合法点；尝试合并并记录一条历史；返回是否合并成功。 |
+| `rollback(snap)` | snap 必须是当前或更早有效快照；撤销到该历史长度，恢复分量数。 |
+| `same(u,v)` | 合法点；返回是否连通，不改结构。 |
+
+**4. 怎么调用**
+
+将本节模板放在业务代码之前，再按下面的输入调用。
+
+```text
+RollbackDSU dsu(4);
+int snap = dsu.snapshot();
+dsu.unite(1, 2);
+bool connected = dsu.same(1, 2);
+assert(connected);
+dsu.rollback(snap);
+assert(!dsu.same(1, 2));
+```
+
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+
+struct RollbackDSU {
+    struct Change { int child, parentRoot, oldSize; bool merged; };
+    vector<int> parent, size;
+    vector<Change> history;
+    int components;
+
+    // n 个点编号为 1..n；初始化 n 个单点集合，要求 n>=1。
+    explicit RollbackDSU(int n) : parent(n + 1), size(n + 1, 1), components(n) {
+        assert(n >= 1);
+        iota(parent.begin(), parent.end(), 0);
+    }
+
+    // x 为 1..n；返回根。禁止路径压缩，以保证 history 能完整撤销。
+    int find(int x) const {
+        while (parent[x] != x) x = parent[x];
+        return x;
+    }
+
+    // 无参数；返回当前 history 长度，作为之后 rollback 的不透明时间点。
+    int snapshot() const { return (int)history.size(); }
+
+    // u,v 为合法点；返回是否真的合并了两个分量，并为每次尝试写入一条可回滚记录。
+    bool unite(int u, int v) {
+        int ru = find(u), rv = find(v);
+        if (ru == rv) { history.push_back({0, 0, 0, false}); return false; }
+        if (size[ru] < size[rv]) swap(ru, rv);
+        history.push_back({rv, ru, size[ru], true});
+        parent[rv] = ru; size[ru] += size[rv]; --components;
+        return true;
+    }
+
+    // snap 必须是当前或更早的 snapshot；返回 void，撤销至该时间点并恢复 components。
+    void rollback(int snap) {
+        assert(0 <= snap && snap <= (int)history.size());
+        while ((int)history.size() > snap) {
+            Change change = history.back(); history.pop_back();
+            if (!change.merged) continue;
+            parent[change.child] = change.child;
+            size[change.parentRoot] = change.oldSize;
+            ++components;
+        }
+    }
+
+    // u,v 为合法点；返回当前是否连通，不修改父树或 history。
+    bool same(int u, int v) const { return find(u) == find(v); }
+};
+```
+
+**5. 要改哪里**
+
+- 若上层需要每次尝试都能按次数回滚，保留失败合并的空记录；删除该记录时，上层快照仍可用，但快照语义变为历史修改数而非尝试数。
+- 若要维护额外集合摘要（如点权和），需在成功合并记录旧摘要并在 rollback 中恢复。
+- 需要在线路径压缩并查集时，不适合本结构；路径压缩会产生多处需记录的父指针变化。
+
+**6. 自检**
+
+4 个点先取快照，合并 1-2、2-3 后 `same(1,3)` 为真且分量数为 2；回滚快照后该查询为假、分量数为 4。重复合并也应能完整回滚。
+
+**7. 坑**
+
+- 不能做路径压缩，否则 `rollback` 没有记录那些被压缩的父指针。
+- 快照是 history 长度，必须来自同一对象且不得大于当前长度。
+- 快照后的修改必须按后进先出回滚；不能保留后续状态再回滚到更早快照。
+- `find/same` 仅在点编号合法时安全；代码不会逐点检查范围。
+
+**8. 一句话原理**
+
+只按大小合并且不压缩路径，使每次合并只需记录少量字段便能按历史逆序恢复。
+
+## 5.31 线段树分治（动态连通性） {#segment-tree-offline}
+
+**1. 它是做什么的**
+
+离线处理一组按时间编号的加边、删边、连通性查询；边的存在状态随时间变化，但查询只问无向图当前是否连通。使用 5.30 的可撤销并查集思想。
+把每条边的活跃时间段放入时间线线段树，DFS 到节点时暂时加入该节点覆盖的边，叶子回答该时刻查询，返回父节点前回滚。
+`Operation` 的 `A` 表示加边、`D` 表示删边、`?` 表示查询；时间是 `0..q-1` 的操作下标。删除匹配同一无向边最近一次尚未删除的添加（LIFO）；没有活跃实例的删除被忽略；重复添加是多个独立实例。返回按查询出现顺序排列的布尔值。
+复杂度：若有 `q` 个操作、最终形成 `s` 个活跃时间区间，每条区间进入 $O(\log(q+1))$ 个树节点；配对操作的 `map` 扫描为 $O(q\log(q+1))$。总时间安全上界为 $O(q\log(q+1)+s\log(q+1)\log(n+1)+q\log(n+1))$，空间 $O(q+s\log(q+1)+n)$；其中 DSU 的对数来自按大小合并的树高，回滚本身按实际弹出记录数计费。
+
+### 时间区间和删除语义
+
+一条边在时刻 `add` 加入、在时刻 `del` 删除，因此只影响半开时间区间 `[add,del)`；若一直未删除，则是 `[add,q)`。在每个线段树节点保存完全覆盖该节点时间区间的边，递归进入节点时调用 `unite`。到叶子时状态正好等于该时刻所有活跃边，回答后回滚。
+
+删除必须先明确语义，否则重复边会产生歧义。本实现采用“最近添加的未删除实例”匹配：`A(1,2), A(1,2), D(1,2)` 只关闭第二条，第一条仍活跃。端点规范化为 `(min(u,v),max(u,v))`，所以反向写的边也视作同一无向边。区间端点按半开处理，`add==del` 的空区间不进入线段树。
+
+**2. 变量在做什么**
+
+| 字段/变量 | 含义 |
+|---|---|
+| `Operation` | 单个时间点操作：`type` 为 `A`、`D` 或 `?`，`u,v` 是 1..n 端点。 |
+| `operations` | 按时间下标 0..q-1 保存的输入操作。 |
+| `tree[p]` | 时间线线段树节点所负责时段内始终活跃的边。 |
+| `answers` | 依查询出现顺序写入的 0/1 连通结果；每次 `run()` 前清空。 |
+| `dsu` | 依赖 5.30 的无路径压缩可撤销并查集。 |
+| `starts` | 构造阶段按规范化无向边保存未删除添加时刻的栈。 |
+
+**3. 函数在做什么**
+
+| 函数 | 契约 |
+|---|---|
+| `OfflineDynamicConnectivity(n, operations)` | n>=1；复制操作，端点须在 1..n，按时间构造边活跃区间树。 |
+| `normalized(u,v)` | 返回 `(min(u,v),max(u,v))`，把反向无向边归一。 |
+| `buildIntervals()` | 内部配对 A/D，按半开活跃时段写入时间线树；无匹配删除忽略。 |
+| `addInterval(...)` | 把边加入完全覆盖的节点；时段采用 `[ql,qr)`。 |
+| `solve(p,l,r)` | 临时合并节点边，叶子处理 `?`，返回前回滚；内部递归。 |
+| `run()` | 清空结果并从 DSU 初态执行；返回按时间顺序排列的 `vector<int>` 查询答案，可重复调用。 |
+
+**4. 怎么调用**
+
+将本节模板放在业务代码之前，再按下面的输入调用。
+
+```text
+vector<Operation> ops = {{'A', 1, 2}, {'?', 1, 2}, {'D', 1, 2}};
+OfflineDynamicConnectivity solver(3, ops);
+vector<int> answers = solver.run();
+assert(answers.size() == 1 && answers[0] == 1);
+```
+
+
+```cpp
+// 依赖：先放入 5.30 节的 RollbackDSU；本节不重复定义它。
+#include <bits/stdc++.h>
+using namespace std;
+
+struct Operation { char type; int u, v; };
+
+struct OfflineDynamicConnectivity {
+    struct Edge { int u, v; };
+    int n, q;
+    vector<Operation> operations;
+    vector<vector<Edge>> tree;
+    vector<int> answers;
+    RollbackDSU dsu;
+
+    // operations 按下标 0..q-1 给出；端点为 1..n；复制操作并构造时间线树。
+    OfflineDynamicConnectivity(int n, vector<Operation> operations)
+        : n(n), q((int)operations.size()), operations(move(operations)), tree(4 * max(1, q) + 4), dsu(n) {
+        assert(n >= 1);
+        buildIntervals();
+    }
+
+    // 无向边规范化；返回按字典序排列的端点，便于把反向边当作同一实例栈。
+    pair<int, int> normalized(int u, int v) const { return {min(u, v), max(u, v)}; }
+
+    // 把边 e 加到时间树中完全覆盖 [ql,qr) 的节点；空区间直接忽略。
+    void addInterval(int p, int l, int r, int ql, int qr, Edge e) {
+        if (qr <= l || r <= ql) return;
+        if (ql <= l && r <= qr) { tree[p].push_back(e); return; }
+        int m = (l + r) / 2;
+        addInterval(p * 2, l, m, ql, qr, e);
+        addInterval(p * 2 + 1, m, r, ql, qr, e);
+    }
+
+    // 扫描 A/D 操作，按 LIFO 配对重复边并生成每条边的半开活跃时间区间。
+    void buildIntervals() {
+        if (q == 0) return;
+        map<pair<int, int>, vector<int>> starts;
+        for (int t = 0; t < q; ++t) {
+            if (operations[t].type == 'A') {
+                starts[normalized(operations[t].u, operations[t].v)].push_back(t);
+            } else if (operations[t].type == 'D') {
+                auto key = normalized(operations[t].u, operations[t].v);
+                auto it = starts.find(key);
+                if (it != starts.end() && !it->second.empty()) {
+                    int begin = it->second.back(); it->second.pop_back();
+                    addInterval(1, 0, q, begin, t, {key.first, key.second});
+                }
+            }
+        }
+        for (const auto& item : starts) for (int begin : item.second)
+            addInterval(1, 0, q, begin, q, {item.first.first, item.first.second});
+    }
+
+    // DFS 时间树节点 [l,r)；进入时加入全部边，离开时回滚，叶子按操作回答查询。
+    void solve(int p, int l, int r) {
+        int snap = dsu.snapshot();
+        for (const Edge& edge : tree[p]) dsu.unite(edge.u, edge.v);
+        if (r - l == 1) {
+            const Operation& op = operations[l];
+            if (op.type == '?') answers.push_back(dsu.same(op.u, op.v));
+        } else {
+            int m = (l + r) / 2;
+            solve(p * 2, l, m); solve(p * 2 + 1, m, r);
+        }
+        dsu.rollback(snap);
+    }
+
+    // 无参数；返回按时间顺序排列的查询结果；可重复调用且每次从空 DSU 状态重新 DFS。
+    vector<int> run() {
+        answers.clear(); dsu.rollback(0);
+        if (q > 0) solve(1, 0, q);
+        return answers;
+    }
+};
+```
+
+**5. 要改哪里**
+
+- 若删除匹配最早尚未删除的添加实例，把每条边的起点容器从栈改为队列，并按 FIFO 取出。
+- 若要回答组件大小等问题，可扩展 5.30 的 DSU 查询与回滚记录；时间区间分解框架保持不变。
+- 若查询要求在线回答，未来操作尚未知，无法预先构造活跃时间段，应选择在线动态连通结构。
+
+**6. 自检**
+
+操作序列 A(1,2), ?(1,2), D(1,2), ?(1,2) 的答案应为 `{1,0}`；空操作列表 `run()` 返回空向量；重复添加后删除一次，另一个实例仍活跃。
+
+**7. 坑**
+
+- 时间区间是半开 `[add,del)`；删除时刻不再包含该边，添加时刻已包含。
+- 重复边按规范化端点和 LIFO 实例配对；未匹配删除被忽略。
+- 类型为 `?` 的操作必须提供合法 u、v；无关字段虽不读取，也应初始化。
+- `run()` 会重置答案并回滚 DSU；不要在递归 DFS 中使用带路径压缩的 DSU。
+- 空操作列表不会调用 `solve`，因此时间线根上的空区间不会被访问。
+
+**8. 一句话原理**
+
+把边的活跃时间段分解到时间线线段树节点，DFS 子树期间临时合并，离开时回滚。
+
+## 5.32 P2 进阶：树上莫队、Segment Tree Beats 与 LCT {#advanced-data-structure-guide}
+
+**适用范围：** 已掌握 P0/P1，希望识别更复杂的离线路径、区间最值修改和在线动态森林模型。**能做什么：** 本节讲清三个专题的入门模型、关键不变量、手算例子和学习边界；可撤销并查集与线段树分治的完整实现见 5.30、5.31。**输入 / 输出：** 三者分别输入静态树路径询问、数组最值修改、森林连删边操作，输出路径统计、区间摘要或动态路径答案。这里提供推导和学习指引，不提供可直接提交的这三个进阶模板；下面的复杂度仅对应明确列出的标准版本。
+
+### 树上莫队：为什么树路径能变成区间
+
+普通莫队维护数组窗口；树路径的点在“每点只记录一次”的 DFS 序上通常不连续。改成每个点进入时和退出时各记一次，得到长度 $2n$ 的括号序。窗口中的同一个点出现两次，就把它视为抵消；只保留出现奇数次的点。每次指针经过一个点 `x`，根据 `active[x]` 加入或删除其颜色，再翻转标志。这是集合的奇偶抵消，不能把序列中两次出现当成两个独立点。
+
+设 `tin[u]`、`tout[u]` 分别是两次出现的位置，并先交换端点使 `tin[u]<=tin[v]`。令 `z=LCA(u,v)`：
+
+- 若 `z=u`，窗口取 `[tin[u],tin[v]]`，奇数次出现的点恰好是路径。
+- 否则取 `[tout[u],tin[v]]`，奇数次出现的点是路径去掉 `z`；回答时临时加入 `z`，读取答案后立刻删除。
+
+手算树边 `1-2,1-3,2-4`，一种括号序为 `[1,2,4,4,2,3,3,1]`。路径 `4→2→1→3` 使用位置 `[4,6]`，看到 `[4,2,3]`，补上 LCA=1 即完整路径。路径 `2→4` 用 `[2,3]`，已经包含两个端点，不再额外补 LCA。
+
+先用倍增预处理 LCA，莫队排序和移动仍在长度 $2n$ 的数组上进行。单点增删 $O(1)$、块长约 $\sqrt n$ 时，总时间为 $O(n\log n+q\log q+q\log n+(n+q)\sqrt n)$，空间 $O(n\log n+q)$；改变增删代价要相应乘上该代价。它适合静态路径不同数、频率平方和等可增删状态；有颜色修改需要再加时间维度，树结构本身改动则此序列会失效。
+
+基础练习先画括号序并人工验证窗口；实现练习把普通莫队的 `add/remove` 改成 `toggle`；组合练习统计路径颜色对数，针对祖先端点、相同端点、跨根路径和补 LCA 后状态恢复做暴力对拍。参考 [OI Wiki：树上莫队](https://oi-wiki.org/misc/mo-algo-on-tree/)。
+
+### Segment Tree Beats：摘要不足时何时可以直接修改
+
+考虑操作 `a[i]=min(a[i],x)`，即把太大的数压到上限 `x`，并查询区间和。只有 `sum` 和最大值无法判断和减少多少；同样总和与最大值的两个区间可能有不同数量的最大元素。即便有最大值个数，当多个不同数都被压低时，仍不能直接知道变化。
+
+标准的单向 `chmin + sum` 版本在每个节点维护总和 `sum`、最大值 `mx1`、严格次大值 `mx2`、最大值个数 `cnt`。次大值必须是**不同于最大值的第二大值**，全相等区间用负无穷哨兵。覆盖节点后分三种情况：
+
+1. `x>=mx1`：没有数受影响，立即返回。
+2. `mx2<x<mx1`：只有最大值变化，`sum -= (mx1-x)*cnt`，再令 `mx1=x`。
+3. `x<=mx2`：仅靠这四个字段无法同时更新合并后的最大值个数和次大值，继续递归孩子。
+
+例如 `[8,8,5,2]` 的摘要为 `(23,8,5,2)`。压到 6 时，和变成 19，最大值为 6、个数仍为 2；再压到 5，最大值个数会由 2 变成 3，不能复用“只改最大值”的公式。向下访问前，要把父亲的上限约束应用到最大值超标的孩子，再合并孩子摘要。
+
+“Beats” 的关键是对递归失败次数做摊还分析。不能声称每一次区间压低都是 $O(\log n)$。仅含区间 `chmin` 与求和/最值的标准版本有 $O((n+q)\log n)$ 的总时间界、$O(n)$ 空间；加入 `chmax`、区间加、历史最值后，字段、标记和证明都变化，不能沿用这里的结论。非空数组、哨兵与合法值不冲突、乘积和总和不溢出也是必要前提。
+
+入门先写暴力压低；再用例子证明为何需要严格次大值；最后实现单向版本并重点对拍全相等、`x=mx1`、`x=mx2`、负数和反复收紧。区间取模等“修改让某个量快速下降”的题也可能用势能分析，但不是直接复制此模板。参考 [OI Wiki：区间最值操作](https://oi-wiki.org/ds/seg-beats/)。
+
+### Link-Cut Tree：树的边也在变化时
+
+HLD 预先确定重儿子和 DFS 位置，删边连边会使这一划分失效。LCT 面向在线动态森林，常见基础任务是 `link(u,v)` 连边、`cut(u,v)` 删现有边、点权修改、路径和或异或查询。它要求图始终是森林：连接已连通的两点会制造环，必须拒绝；删边也必须确认两点直接相邻。
+
+LCT 用若干棵 Splay 辅助树表示原森林的一些路径；辅助树的父子关系不等于原树的父子关系。`access(v)` 将通往 `v` 的路径组织成可查询的辅助结构；`makeRoot(u)` 暴露路径并打翻转标记，使 `u` 成为表示上的根。执行 `makeRoot(u)`、`access(v)`、`splay(v)` 后，`v` 的辅助树摘要对应原树 `u→v` 路径。翻转会交换左右孩子；非交换摘要要同时保存正向与反向值。
+
+例如森林有边 `1-2,2-3`，点权 `[4,7,1]`，路径 1 到 3 的和为 12。删除 `2-3` 后，1 与 3 不连通，不能继续查询一条不存在的路径；再连 `1-3`，路径 2 到 3 变为 `2→1→3`，和仍为 12，而路径 1 到 3 的和变为 5。
+
+标准 Splay 型 LCT 的连边、断边、暴露路径及路径查询为摊还 $O(\log n)$，单次不保证最坏 $O(\log n)$，空间 $O(n)$。先学 Splay 的旋转、伸展、下传再旋转，之后逐项实现 LCT。任意图动态连通性不等于动态森林；子树信息也不能直接当成路径摘要，需要另外处理虚子树贡献。
+
+基础练习手算原树与辅助树的区别；实现练习先只做路径异或，随机连删合法森林边与 BFS 暴力对拍；组合练习再加路径懒标记。若全部操作离线且只查连通性，先考虑 5.31；若树边不变，先确认 HLD 是否已经足够。参考 [OI Wiki：Link Cut Tree](https://oi-wiki.org/ds/lct/)。

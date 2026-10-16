@@ -1865,3 +1865,145 @@ struct MinCostMaxFlow {
 **8. 一句话原理**
 
 每次在残量图中找费用最低的增广路并推送瓶颈流量，同时用反向边保留改道能力。
+
+## 6.16 树上差分 + LCA {#tree-difference}
+
+**1. 它是做什么的**
+
+ 一棵静态连通树，多次给路径上的所有点或边增加权值，最后统一读取各点或各边的总增量。
+
+将每次路径修改变成常数个差分标记，最后一次自底向上汇总。
+
+输入 1-based 无向树、根和若干 `(u,v,w)`；输出 `node[u]` 为点 `u` 总增量，`edge[u]` 为父边 `(parent[u],u)` 总增量，根的父边值为 0。允许负增量和重复路径；不改变原始权值。
+
+复杂度：预处理时间、空间 $O(n\log n)$，每次加路径 $O(\log n)$，一次汇总 $O(n)$；$q$ 次更新再统一汇总共 $O((n+q)\log n)$。逐次汇总查询会增加到 $O(nq)$，不适用于高频在线查询。
+
+**从数组差分开始。** 数组区间加可以只在左端点记开始、右端点之后记结束，最后前缀和还原。树没有唯一的“右端点”，但每个非根节点都有唯一父亲。我们改为让标记向父亲汇总：在 `u` 记 `+w`，就会让 `u` 到根的整条祖先链收到 `w`。负标记负责抵消不应该被修改的祖先。
+
+**为什么要用 LCA。** 记 $z=\operatorname{lca}(u,v)$。分别在 `u`、`v` 加 `w`，上行到 `z` 时两路汇合，`z` 及其以上祖先暂时收到两份贡献。对点路径，`z` 应收到一份而其父亲以上应收到零份，所以：
+
+$$
+d_u\mathrel{+}=w,\quad d_v\mathrel{+}=w,\quad d_z\mathrel{-}=w,\quad d_{\operatorname{parent}(z)}\mathrel{-}=w.
+$$
+
+父亲为虚拟点 0 时，最后一项直接跳过。对边路径，把每条边寄存在较深端点：路径上不包含 `z` 的父边，故在 `z` 减去两份：
+
+$$
+e_u\mathrel{+}=w,\quad e_v\mathrel{+}=w,\quad e_z\mathrel{-}=2w.
+$$
+
+最后按孩子先于父亲的顺序执行 `d[parent[u]] += d[u]`。它是在计算每个点的差分子树和，不是沿 DFS 序直接做数组前缀和。点和边要用两套公式，不能混用。
+
+**手算。** 树边为 `1-2, 1-3, 2-4, 2-5`。给路径 `4→2→5` 加 3，LCA 为 2。点差分先记 `d[4]=3,d[5]=3,d[2]=-3,d[1]=-3`；汇总后点 4、5、2 都是 3，点 1、3 是 0。边差分在点 2 记 -6，汇总后 `e[4]=e[5]=3,e[2]=0`，因此父边 `1-2` 没有被误加。若 `u=v`，点路径只含一个点，边路径为空，公式仍成立。
+
+**2. 变量在做什么**
+
+| 名称 | 含义 |
+|---|---|
+| `lca` | 6.10 节的倍增 LCA，`up[0][u]` 为父亲；根的父亲为 0。 |
+| `order` | 从根开始、父亲先于孩子的遍历序；逆序汇总时孩子已完成计算。 |
+| `nodeDiff[u]` | 点路径的差分标记，尚未汇总时不能当作节点答案。 |
+| `edgeDiff[u]` | 边路径的差分标记，汇总后由较深端点代表父边。 |
+| `node[u]`、`edge[u]` | `collect()` 返回的总增量副本；根对应的 `edge` 值为 0。 |
+| `z`、`p` | 更新路径的 LCA 及其父亲；点差分在 `p=0` 时跳过抵消。 |
+
+**3. 函数在做什么**
+
+| 函数 | 参数、返回与作用 |
+|---|---|
+| `TreePathDifference(tree,root)` | 输入非空的 1-based 连通无向树及合法根，建立 LCA、遍历序，清零两套差分，不修改原树。 |
+| `addNodes(u,v,w)` | 给包含两端的点路径记录增量 `w`，返回 `void`，只改 `nodeDiff`。 |
+| `addEdges(u,v,w)` | 给路径上的边记录增量 `w`，返回 `void`，只改 `edgeDiff`；同点路径没有边。 |
+| `collect()` | 无参数，返回两套 1-based 总增量数组；在副本上汇总，不清空原标记，可重复调用或继续更新。 |
+
+**4. 怎么调用**
+
+下方复用 6.10 节的 `BinaryLiftingLCA`，先复制其定义。输入须为非空的合法树。所有差分值、子树累计值与 `2*w` 均须能放入 `long long`。构造时 BFS 得到父先于子的序列，反向处理即可避免这部分的递归栈。
+
+```cpp
+// 依赖：6.10 的 BinaryLiftingLCA，以及 <bits/stdc++.h> 和 using namespace std。
+struct TreePathDifference {
+    BinaryLiftingLCA lca;
+    vector<int> order;
+    vector<long long> nodeDiff, edgeDiff;
+
+    // tree 为 1-based 非空连通无向树，root 在 1..n；建立 LCA/遍历序并清零差分，不修改 tree。
+    TreePathDifference(const vector<vector<int>>& tree, int root = 1)
+        : lca(tree, root), nodeDiff(tree.size()), edgeDiff(tree.size()) {
+        order.push_back(root);
+        for (size_t i = 0; i < order.size(); ++i) {
+            int u = order[i];
+            for (int v : tree[u]) if (v != lca.up[0][u]) order.push_back(v);
+        }
+    }
+
+    // u,v 为 1..n 点号，w 为增量；返回 void，记录点路径（包含两端）的加法，暂不汇总。
+    void addNodes(int u, int v, long long w) {
+        int z = lca.lca(u, v), p = lca.up[0][z];
+        nodeDiff[u] += w;
+        nodeDiff[v] += w;
+        nodeDiff[z] -= w;
+        if (p) nodeDiff[p] -= w;
+    }
+
+    // u,v 为 1..n 点号，w 为增量；返回 void，记录路径所有边的加法；u==v 时总效果为零。
+    void addEdges(int u, int v, long long w) {
+        int z = lca.lca(u, v);
+        edgeDiff[u] += w;
+        edgeDiff[v] += w;
+        edgeDiff[z] -= 2 * w;
+    }
+
+    // 无参数；返回 {点增量数组,父边增量数组}，均 1-based；不修改差分，可重复调用或继续添加路径。
+    pair<vector<long long>, vector<long long>> collect() const {
+        auto node = nodeDiff, edge = edgeDiff;
+        for (int i = (int)order.size() - 1; i > 0; --i) {
+            int u = order[i], p = lca.up[0][u];
+            node[p] += node[u];
+            edge[p] += edge[u];
+        }
+        edge[order[0]] = 0;
+        return {node, edge};
+    }
+};
+```
+
+下面对树 `1-2,1-3,2-4,2-5` 的路径 `4→2→5` 分别增加点、边贡献。两套标记互不影响，需要两类结果时分别调用。
+
+```text
+vector<vector<int>> tree = {{}, {2,3}, {1,4,5}, {1}, {2}, {2}};
+TreePathDifference solver(tree, 1);
+solver.addNodes(4, 5, 3);
+solver.addEdges(4, 5, 3);
+auto [node, edge] = solver.collect();
+assert((node == vector<long long>{0,0,3,0,3,3}));
+assert((edge == vector<long long>{0,0,0,0,3,3}));
+assert(solver.collect() == make_pair(node, edge));
+```
+
+**5. 要改哪里**
+
+- 原始点权或边权非零时，在最终增量上叠加原值；模板不会替调用者保存原权值。
+- 统计路径经过次数时令 `w=1`，再找经过次数最多的边；若要求总运输成本，可将父边权乘以 `edge[u]` 后求和。
+- 路径拥堵次数、批量负载累加适合本法；每次修改后立即查询任意路径和，应改用 HLD 等动态维护方法。差分不能直接维护路径最小值。
+- 改根或换树时新建对象；`collect()` 允许重复调用，但每次都是 $O(n)$，不能据此把批量算法当成高效在线算法。
+
+**6. 自检**
+
+基础：按上例手算差分与子树和，再检查链、星形树、根为 LCA 的情况。`u=v` 时，点更新只影响一个点，边更新总效果为零。
+
+实现：将随机路径逐点枚举的暴力结果与模板比较；检查负增量、重复路径、没有更新、重复汇总以及汇总后再更新。组合：计算所有路径的总边权贡献，并与逐条路径暴力求和比较。
+
+**7. 坑**
+
+1. 点路径沿用边差分公式，会把 LCA 的点贡献减掉；先明确维护点还是边。
+2. 将 DFS 序做前缀和不能恢复树上差分；应按孩子先于父亲的顺序累计子树和。
+3. 调用 `addNodes` 不会更新边标记；两类操作与结果分别维护。
+4. 根没有父边，不能把 `edge[root]` 当成真实边答案。
+5. `2*w`、差分和累计值都可能溢出，须分别检查 `long long` 范围。
+
+**8. 一句话原理**
+
+端点标记产生向根传播的贡献，在 LCA 及其父亲处抵消多余部分，再用一次子树汇总还原整批路径增量。
+
+**参考：** [OI Wiki：前缀和与差分（含树上差分）](https://oi-wiki.org/basic/prefix-sum/)。
